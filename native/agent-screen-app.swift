@@ -126,6 +126,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var dragWasPressed = false
     private var dragSeenMovement = false
     private var dragWatchTimer: Timer?
+    private var titlebarTimer: Timer?
+    private var windowCloseObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let rect = NSRect(x: 0, y: 0, width: 960, height: 600)
@@ -142,6 +144,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         contentView.wantsLayer = true
         contentView.layer?.backgroundColor = NSColor.black.cgColor
         window.contentView = contentView
+        // Programmatic NSWindows default to isReleasedWhenClosed=true, so
+        // AppKit frees the window on close while the delegate property still
+        // points at it — the polling timers below then crash with
+        // EXC_BAD_ACCESS (use-after-free on window.frame). Keep it alive.
+        window.isReleasedWhenClosed = false
         window.center()
         // Show the window without stealing key focus from Hermes.
         window.orderFrontRegardless()
@@ -198,11 +205,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         window.contentAspectRatio = NSSize(width: kNativeWidth, height: kNativeHeight)
 
-        Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
+        titlebarTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.updateTitlebarHighlight()
         }
 
         installWindowDragMonitor()
+
+        // The drag/titlebar timers poll `window`; once the user closes the
+        // window (or the app terminates) they must stop, or a late tick
+        // touches a freed window (crash: tickDragWatch → window.frame).
+        windowCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.stopTimers()
+        }
     }
 
     // MARK: - Drag portal (drop a foreign window onto us → teleport it)
@@ -427,6 +445,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        stopTimers()
+    }
+
+    private func stopTimers() {
+        dragWatchTimer?.invalidate()
+        dragWatchTimer = nil
+        titlebarTimer?.invalidate()
+        titlebarTimer = nil
     }
 }
 

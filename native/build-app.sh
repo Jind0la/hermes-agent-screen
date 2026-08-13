@@ -117,7 +117,7 @@ build_icns() {
   say "building AgentScreen.icns from $ICON_SRC"
   rm -rf "$ICON_DIR/AgentScreen.iconset"
   mkdir -p "$ICON_DIR/AgentScreen.iconset"
-  if command -v python3 >/dev/null 2>&1 && python3 -c 'import PIL' 2>/dev/null; then
+  if command -v python3 >/dev/null 2>&1 && python3 -c 'from PIL import Image' 2>/dev/null; then
     python3 - "$ICON_SRC" "$ICON_DIR/AgentScreen.iconset" <<'PYEOF'
 import sys
 from PIL import Image
