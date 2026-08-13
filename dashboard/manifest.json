@@ -1,0 +1,8 @@
+{
+  "name": "agent-screen",
+  "label": "Agent Screen",
+  "description": "Virtual display for macOS (DeskPad fork) — start/stop a second screen with a native window + live MJPEG preview. Local macOS backend only.",
+  "icon": "Monitor",
+  "version": "1.1.0",
+  "api": "plugin_api.py"
+}

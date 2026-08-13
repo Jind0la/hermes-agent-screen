@@ -1,0 +1,9 @@
+# Native build artifacts — never commit binaries or generated bundles
+native/app/
+*.icns
+AgentScreen.iconset/
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+venv/
