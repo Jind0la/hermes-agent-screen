@@ -22,6 +22,10 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
   kommen aus derselben Config (Whitelist von 6 Auflösungen, Float/Bool → Default),
   `/status` meldet die effektiven Werte, `kNativeWidth/Height` sind durch
   `runtimeConfig` ersetzt. Refresh bleibt 60, `descriptor.maxPixelsWide/High` 5120/2160.
+- **Eich-02 Nachzug (18:30):** `CGVirtualDisplayMode(width:height:)` nimmt NSUInteger;
+  Config-Ints wurden nicht implizit gecastet (nur Literale) → Build-Fehler behoben mit
+  explizitem `UInt(...)`. Bundle wirklich neu gebaut + signiert (Agent Screen Dev,
+  Signed 15.08. 18:30:46), Binary enthält `nativeWidth`.
 
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
