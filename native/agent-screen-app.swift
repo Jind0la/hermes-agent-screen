@@ -26,38 +26,73 @@ import ApplicationServices
 private let kVendorID: UInt32 = 0x4845 // 'HE'
 private let kProductID: UInt32 = 0x4153 // 'AS'
 private let kSerialNum: UInt32 = 0x0001
-private let kNativeWidth = 3360
-private let kNativeHeight = 2100
 private let kStreamMaxClients = 8
 private let kJpegWidth = 1280
 
 // MARK: - Runtime config (~/.hermes/agent-screen.json)
 //
-// The display name and JPEG cadence are read at app start from
-// ~/.hermes/agent-screen.json so they are configurable without recompiling.
-// These Swift rules MUST match dashboard/config.py in this repo — that file
-// is the canonical parser (pure functions + a `load(path)` that returns
-// defaults on any error). Keep the two implementations in lockstep.
+// The display name, JPEG cadence, native resolution and mode list are read at
+// app start from ~/.hermes/agent-screen.json so they are configurable without
+// recompiling. These Swift rules MUST match dashboard/config.py in this repo —
+// that file is the canonical parser (pure functions + a `load(path)` that
+// returns defaults on any error). Keep the two implementations in lockstep.
 //
 //   {
-//     "displayName": "Agent Screen Display",   // trim, non-empty, <= 40 chars
-//     "jpegEveryNthFrame": 20                  // integer, clamped to 1...60
+//     "displayName": "Agent Screen Display",  // trim, non-empty, <= 40 chars
+//     "jpegEveryNthFrame": 20,                 // integer, clamped to 1...60
+//     "nativeWidth": 3360,                     // both integers + on whitelist
+//     "nativeHeight": 2100,
+//     "modes": [[3360, 2100], ...]             // every pair on whitelist
 //   }
 //
+// Resolution whitelist (width, height):
+//   3360x2100, 3840x2160, 2560x1440, 1920x1080, 1600x900, 1280x720
 // Missing file / invalid JSON / bad value -> defaults, never a crash.
 struct RuntimeConfig {
     let displayName: String
     let jpegEveryNthFrame: Int
+    let nativeWidth: Int
+    let nativeHeight: Int
+    let modes: [[Int]]
 
     static let defaultDisplayName = "Agent Screen Display"
     static let defaultJpegEveryNthFrame = 20
     static let displayNameMaxLen = 40
     static let jpegMin = 1
     static let jpegMax = 60
+    static let defaultNativeWidth = 3360
+    static let defaultNativeHeight = 2100
+    static let defaultModes: [[Int]] = [
+        [3360, 2100],
+        [3840, 2160],
+        [2560, 1440],
+        [1920, 1080],
+        [1600, 900],
+        [1280, 720],
+    ]
+
+    /// The whitelist as "w:h" keys, so a pair lookup is O(1).
+    private static var allowedResolutions: Set<String> {
+        Set(defaultModes.map { "\($0[0]):\($0[1])" })
+    }
+
+    /// True when `n` is an NSNumber that represents a JSON integer (not a
+    /// float, not a bool). JSONSerialization gives ints objCType "q", floats
+    /// "d", bools CFBoolean (objCType "c") — so reject "d"/"f" and bools.
+    /// This is the float-parity rule from the Eich-01 review: 3360.0 is NOT a
+    /// valid integer here, matching Python's `isinstance(v, int)`.
+    private static func isInt(_ n: NSNumber) -> Bool {
+        if CFGetTypeID(n) == CFBooleanGetTypeID() { return false }
+        let t = String(cString: n.objCType)
+        return t != "d" && t != "f"
+    }
 
     static func load() -> RuntimeConfig {
         var displayName = defaultDisplayName
         var jpegEveryNthFrame = defaultJpegEveryNthFrame
+        var nativeWidth = defaultNativeWidth
+        var nativeHeight = defaultNativeHeight
+        var modes = defaultModes
 
         let path = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".hermes")
@@ -65,7 +100,8 @@ struct RuntimeConfig {
         guard let data = try? Data(contentsOf: path),
               let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         else {
-            return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame)
+            return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame,
+                                 nativeWidth: nativeWidth, nativeHeight: nativeHeight, modes: modes)
         }
 
         // displayName: String, trimmed non-empty and <= 40 chars, else default.
@@ -77,15 +113,46 @@ struct RuntimeConfig {
         }
 
         // jpegEveryNthFrame: Int clamped to 1...60, else default.
-        if let raw = obj["jpegEveryNthFrame"] as? NSNumber, CFGetTypeID(raw) == CFNumberGetTypeID() {
-            let isBool = CFBooleanGetTypeID() == CFGetTypeID(raw)  // JSON true/false
-            if !isBool {
-                let value = raw.intValue
-                jpegEveryNthFrame = min(max(value, jpegMin), jpegMax)
+        if let raw = obj["jpegEveryNthFrame"] as? NSNumber, isInt(raw) {
+            let value = raw.intValue
+            jpegEveryNthFrame = min(max(value, jpegMin), jpegMax)
+        }
+
+        // nativeWidth/nativeHeight: only valid together — both JSON integers
+        // AND the pair on the whitelist. Otherwise keep the default.
+        if let w = obj["nativeWidth"] as? NSNumber, isInt(w),
+           let h = obj["nativeHeight"] as? NSNumber, isInt(h) {
+            let key = "\(w.intValue):\(h.intValue)"
+            if allowedResolutions.contains(key) {
+                nativeWidth = w.intValue
+                nativeHeight = h.intValue
             }
         }
 
-        return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame)
+        // modes: array of [w, h] pairs, EVERY pair on the whitelist (both
+        // entries JSON integers). Empty / non-array / any invalid pair ->
+        // the default six modes.
+        if let raw = obj["modes"] as? [Any], !raw.isEmpty {
+            var parsed: [[Int]] = []
+            var valid = true
+            for item in raw {
+                guard let pair = item as? [Any], pair.count == 2,
+                      let w = pair[0] as? NSNumber, isInt(w),
+                      let h = pair[1] as? NSNumber, isInt(h),
+                      allowedResolutions.contains("\(w.intValue):\(h.intValue)")
+                else {
+                    valid = false
+                    break
+                }
+                parsed.append([w.intValue, h.intValue])
+            }
+            if valid {
+                modes = parsed
+            }
+        }
+
+        return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame,
+                             nativeWidth: nativeWidth, nativeHeight: nativeHeight, modes: modes)
     }
 }
 
@@ -236,21 +303,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = CGVirtualDisplaySettings()
         settings.hiDPI = 1
-        settings.modes = [
-            CGVirtualDisplayMode(width: 3360, height: 2100, refreshRate: 60),
-            CGVirtualDisplayMode(width: 3840, height: 2160, refreshRate: 60),
-            CGVirtualDisplayMode(width: 2560, height: 1440, refreshRate: 60),
-            CGVirtualDisplayMode(width: 1920, height: 1080, refreshRate: 60),
-            CGVirtualDisplayMode(width: 1600, height: 900, refreshRate: 60),
-            CGVirtualDisplayMode(width: 1280, height: 720, refreshRate: 60),
-        ]
+        settings.modes = runtimeConfig.modes.map {
+            CGVirtualDisplayMode(width: $0[0], height: $0[1], refreshRate: 60)
+        }
         display.apply(settings)
         NSLog("[agent-screen] display created: ID \(display.displayID)")
 
         let stream = CGDisplayStream(
             dispatchQueueDisplay: display.displayID,
-            outputWidth: kNativeWidth,
-            outputHeight: kNativeHeight,
+            outputWidth: runtimeConfig.nativeWidth,
+            outputHeight: runtimeConfig.nativeHeight,
             pixelFormat: 1_111_970_369, // kCVPixelFormatType_32BGRA
             properties: [CGDisplayStream.showCursor: true] as CFDictionary,
             queue: .main,
@@ -262,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         stream?.start()
         NSLog("[agent-screen] CGDisplayStream running.")
 
-        window.contentAspectRatio = NSSize(width: kNativeWidth, height: kNativeHeight)
+        window.contentAspectRatio = NSSize(width: runtimeConfig.nativeWidth, height: runtimeConfig.nativeHeight)
 
         titlebarTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.updateTitlebarHighlight()
@@ -496,8 +558,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let w = contentView.bounds.width
         let h = contentView.bounds.height
         guard w > 0, h > 0, display != nil else { return }
-        let dispW = CGFloat(kNativeWidth)
-        let dispH = CGFloat(kNativeHeight)
+        let dispW = CGFloat(runtimeConfig.nativeWidth)
+        let dispH = CGFloat(runtimeConfig.nativeHeight)
         let x = p.x / w * dispW
         let y = (h - p.y) / h * dispH
         CGDisplayMoveCursorToPoint(display.displayID, CGPoint(x: x, y: y))

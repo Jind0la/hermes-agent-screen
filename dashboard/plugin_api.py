@@ -108,6 +108,9 @@ def _state(*, error: str | None = None) -> dict:
         "platform": sys.platform,
         "displayName": effective["displayName"],
         "jpegEveryNthFrame": effective["jpegEveryNthFrame"],
+        "nativeWidth": effective["nativeWidth"],
+        "nativeHeight": effective["nativeHeight"],
+        "modes": effective["modes"],
     }
     if error:
         payload["error"] = error

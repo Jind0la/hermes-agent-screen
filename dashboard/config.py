@@ -12,7 +12,10 @@ Schema (only these keys; anything else is ignored):
 
     {
       "displayName": "Agent Screen Display",
-      "jpegEveryNthFrame": 20
+      "jpegEveryNthFrame": 20,
+      "nativeWidth": 3360,
+      "nativeHeight": 2100,
+      "modes": [[3360, 2100], [3840, 2160], [2560, 1440], [1920, 1080], [1600, 900], [1280, 720]]
     }
 
 Defaults are used when the file is missing, invalid JSON, or a value fails
@@ -29,6 +32,21 @@ DEFAULT_JPEG_EVERY_NTH_FRAME = 20
 MAX_DISPLAY_NAME_LEN = 40
 JPEG_EVERY_NTH_FRAME_MIN = 1
 JPEG_EVERY_NTH_FRAME_MAX = 60
+
+DEFAULT_NATIVE_WIDTH = 3360
+DEFAULT_NATIVE_HEIGHT = 2100
+DEFAULT_MODES: list[list[int]] = [
+    [3360, 2100],
+    [3840, 2160],
+    [2560, 1440],
+    [1920, 1080],
+    [1600, 900],
+    [1280, 720],
+]
+
+# Whitelist of allowed resolutions (width, height). Anything not in here falls
+# back to defaults — mirrors native/agent-screen-app.swift.
+_ALLOWED_RESOLUTIONS = {tuple(m) for m in DEFAULT_MODES}
 
 # Config file read at app start. It lives under ~/.hermes (install dir), not
 # the repo, so it survives plugin re-installs and is user-editable.
@@ -58,13 +76,58 @@ def parse_jpeg_every_nth_frame(raw: Any) -> int:
     return raw
 
 
+def _is_int(v: Any) -> bool:
+    """A JSON integer: an int that is not a bool (bool is a subclass in Python)."""
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def parse_native(raw_width: Any, raw_height: Any) -> tuple[int, int]:
+    """Effective native resolution as (width, height).
+
+    Valid only when BOTH values are integers (not bool, not float) AND the pair
+    is on the resolution whitelist. Anything else -> (3360, 2100).
+    """
+    if _is_int(raw_width) and _is_int(raw_height):
+        if (raw_width, raw_height) in _ALLOWED_RESOLUTIONS:
+            return raw_width, raw_height
+    return DEFAULT_NATIVE_WIDTH, DEFAULT_NATIVE_HEIGHT
+
+
+def parse_modes(raw: Any) -> list[list[int]]:
+    """Effective mode list (in config order).
+
+    Must be an array of [width, height] pairs where EVERY pair is on the
+    whitelist (and both entries are integers, not floats/bools). Empty list,
+    non-list, or any invalid pair -> the default six modes.
+    """
+    if not isinstance(raw, list) or not raw:
+        return [list(m) for m in DEFAULT_MODES]
+    modes: list[list[int]] = []
+    for item in raw:
+        if not isinstance(item, list) or len(item) != 2:
+            return [list(m) for m in DEFAULT_MODES]
+        w, h = item
+        if not _is_int(w) or not _is_int(h):
+            return [list(m) for m in DEFAULT_MODES]
+        if (w, h) not in _ALLOWED_RESOLUTIONS:
+            return [list(m) for m in DEFAULT_MODES]
+        modes.append([w, h])
+    return modes
+
+
 def parse(raw: Any) -> dict:
     """Turn an already-parsed JSON object into effective values (pure)."""
     if not isinstance(raw, dict):
         raw = {}
+    native_width, native_height = parse_native(
+        raw.get("nativeWidth"), raw.get("nativeHeight")
+    )
     return {
         "displayName": parse_display_name(raw.get("displayName")),
         "jpegEveryNthFrame": parse_jpeg_every_nth_frame(raw.get("jpegEveryNthFrame")),
+        "nativeWidth": native_width,
+        "nativeHeight": native_height,
+        "modes": parse_modes(raw.get("modes")),
     }
 
 

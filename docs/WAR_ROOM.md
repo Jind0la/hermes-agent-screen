@@ -18,9 +18,12 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
 - **Eich-01 erledigt:** Display-Name + `jpegEveryNthFrame` aus `~/.hermes/agent-screen.json`
   gelesen (Backend `dashboard/config.py`, Swift-Spiegel in `native/agent-screen-app.swift`,
   Beispiel `native/agent-screen.json.example`). `/status` meldet die effektiven Werte.
+- **Eich-02 erledigt:** Auflösung (`nativeWidth`/`nativeHeight`) + Modus-Liste (`modes`)
+  kommen aus derselben Config (Whitelist von 6 Auflösungen, Float/Bool → Default),
+  `/status` meldet die effektiven Werte, `kNativeWidth/Height` sind durch
+  `runtimeConfig` ersetzt. Refresh bleibt 60, `descriptor.maxPixelsWide/High` 5120/2160.
 
 ## Laufende Tasks
-- [ ] Konfigurierbar: Auflösung/Modi (nach Eich-01)
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 

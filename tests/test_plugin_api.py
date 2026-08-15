@@ -156,6 +156,28 @@ def test_status_defaults_when_no_config(client, plugin_api, monkeypatch, tmp_pat
     body = r.json()
     assert body["displayName"] == plugin_api.config.DEFAULT_DISPLAY_NAME
     assert body["jpegEveryNthFrame"] == plugin_api.config.DEFAULT_JPEG_EVERY_NTH_FRAME
+    assert body["nativeWidth"] == plugin_api.config.DEFAULT_NATIVE_WIDTH
+    assert body["nativeHeight"] == plugin_api.config.DEFAULT_NATIVE_HEIGHT
+    assert body["modes"] == plugin_api.config.DEFAULT_MODES
+
+
+def test_status_reports_native_and_modes(client, plugin_api, monkeypatch, tmp_path):
+    monkeypatch.setattr(plugin_api, "_supported", lambda: False)
+    monkeypatch.setattr(plugin_api, "_app_running", lambda: False)
+    monkeypatch.setattr(plugin_api, "_stream_ok", lambda: False)
+    cfg_path = tmp_path / "agent-screen.json"
+    cfg_path.write_text(
+        '{"nativeWidth": 1920, "nativeHeight": 1080,'
+        ' "modes": [[1920, 1080], [1280, 720]]}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(plugin_api.config, "DEFAULT_CONFIG_PATH", cfg_path)
+    r = client.get("/api/plugins/agent-screen/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["nativeWidth"] == 1920
+    assert body["nativeHeight"] == 1080
+    assert body["modes"] == [[1920, 1080], [1280, 720]]
 
 
 def test_process_control_uses_exact_name_not_full_cmdline(plugin_api):
