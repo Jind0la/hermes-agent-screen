@@ -304,7 +304,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = CGVirtualDisplaySettings()
         settings.hiDPI = 1
         settings.modes = runtimeConfig.modes.map {
-            CGVirtualDisplayMode(width: $0[0], height: $0[1], refreshRate: 60)
+            CGVirtualDisplayMode(width: UInt($0[0]), height: UInt($0[1]), refreshRate: 60)
         }
         display.apply(settings)
         NSLog("[agent-screen] display created: ID \(display.displayID)")
