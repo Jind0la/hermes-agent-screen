@@ -123,6 +123,41 @@ def test_stop_is_noop_when_not_running(client, plugin_api, monkeypatch):
     assert calls == []
 
 
+def test_status_reports_effective_config_values(client, plugin_api, monkeypatch, tmp_path):
+    monkeypatch.setattr(plugin_api, "_supported", lambda: False)
+    monkeypatch.setattr(plugin_api, "_app_running", lambda: False)
+    monkeypatch.setattr(plugin_api, "_stream_ok", lambda: False)
+    cfg_path = tmp_path / "agent-screen.json"
+    cfg_path.write_text(
+        '{"displayName": "  Konfig Display  ", "jpegEveryNthFrame": 42}',
+        encoding="utf-8",
+    )
+    # Point the standalone-loaded config module at our temp file.
+    monkeypatch.setattr(plugin_api.config, "DEFAULT_CONFIG_PATH", cfg_path)
+    r = client.get("/api/plugins/agent-screen/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["displayName"] == "Konfig Display"
+    assert body["jpegEveryNthFrame"] == 42
+
+
+def test_status_defaults_when_no_config(client, plugin_api, monkeypatch, tmp_path):
+    monkeypatch.setattr(plugin_api, "_supported", lambda: False)
+    monkeypatch.setattr(plugin_api, "_app_running", lambda: False)
+    monkeypatch.setattr(plugin_api, "_stream_ok", lambda: False)
+    # Point at a path that does not exist -> parser must fall back to defaults.
+    monkeypatch.setattr(
+        plugin_api.config,
+        "DEFAULT_CONFIG_PATH",
+        tmp_path / "no-such-config.json",
+    )
+    r = client.get("/api/plugins/agent-screen/status")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["displayName"] == plugin_api.config.DEFAULT_DISPLAY_NAME
+    assert body["jpegEveryNthFrame"] == plugin_api.config.DEFAULT_JPEG_EVERY_NTH_FRAME
+
+
 def test_process_control_uses_exact_name_not_full_cmdline(plugin_api):
     src = PLUGIN_MODULE_PATH.read_text()
     assert '["pgrep", "-x", PROC_NAME]' in src

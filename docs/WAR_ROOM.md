@@ -15,11 +15,13 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
 - Dock-Icon V4 (Retro-Manga CRT, randlos)
 - Autostart: entschieden — kein LaunchAgent, nur bei Bedarf
 - Ausführliche lokale Checkliste + Fakten: `~/Workspace/projects/09-agent-screen/CHECKLISTE.md`
+- **Eich-01 erledigt:** Display-Name + `jpegEveryNthFrame` aus `~/.hermes/agent-screen.json`
+  gelesen (Backend `dashboard/config.py`, Swift-Spiegel in `native/agent-screen-app.swift`,
+  Beispiel `native/agent-screen.json.example`). `/status` meldet die effektiven Werte.
 
 ## Laufende Tasks
+- [ ] Konfigurierbar: Auflösung/Modi (nach Eich-01)
 - [ ] Kleinkram-Sammlung des Users
-- [ ] Konfigurierbar: Auflösung/Modi + FPS des MJPEG-Streams (3360×2100, ~3fps)
-- [ ] Display-Name konfigurierbar
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 
 ## Entscheidungen

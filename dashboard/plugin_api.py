@@ -24,6 +24,7 @@ has no auth — any local process can watch. That is intentional and documented.
 """
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import time
@@ -32,6 +33,17 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
+
+# dashboard/config.py holds the pure parser (same rules the native Swift
+# loader implements). plugin_api is loaded standalone by the dashboard, so
+# load config.py explicitly rather than relying on a package context.
+_DASHBOARD_DIR = Path(__file__).resolve().parent
+_config_spec = importlib.util.spec_from_file_location(
+    "agent_screen_config", _DASHBOARD_DIR / "config.py"
+)
+assert _config_spec is not None and _config_spec.loader is not None
+config = importlib.util.module_from_spec(_config_spec)
+_config_spec.loader.exec_module(config)
 
 # The launcher ships with the plugin. The built .app lives under
 # ~/.hermes/agent-screen (see native/build-app.sh). No user-facing env var —
@@ -85,11 +97,17 @@ def _stream_ok() -> bool:
 
 
 def _state(*, error: str | None = None) -> dict:
+    # Effective runtime values from the same parser the native app uses —
+    # reported even when the app is not running, so the config is testable
+    # without a virtual display.
+    effective = config.load()
     payload = {
         "running": _app_running() if _supported() else False,
         "stream": _stream_ok() if _supported() else False,
         "supported": _supported(),
         "platform": sys.platform,
+        "displayName": effective["displayName"],
+        "jpegEveryNthFrame": effective["jpegEveryNthFrame"],
     }
     if error:
         payload["error"] = error

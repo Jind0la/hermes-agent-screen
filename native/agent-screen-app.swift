@@ -26,12 +26,68 @@ import ApplicationServices
 private let kVendorID: UInt32 = 0x4845 // 'HE'
 private let kProductID: UInt32 = 0x4153 // 'AS'
 private let kSerialNum: UInt32 = 0x0001
-private let kDisplayName = "Agent Screen Display"
 private let kNativeWidth = 3360
 private let kNativeHeight = 2100
 private let kStreamMaxClients = 8
-private let kJpegEveryNthFrame = 20 // ~3 fps at a 60 Hz display stream
 private let kJpegWidth = 1280
+
+// MARK: - Runtime config (~/.hermes/agent-screen.json)
+//
+// The display name and JPEG cadence are read at app start from
+// ~/.hermes/agent-screen.json so they are configurable without recompiling.
+// These Swift rules MUST match dashboard/config.py in this repo — that file
+// is the canonical parser (pure functions + a `load(path)` that returns
+// defaults on any error). Keep the two implementations in lockstep.
+//
+//   {
+//     "displayName": "Agent Screen Display",   // trim, non-empty, <= 40 chars
+//     "jpegEveryNthFrame": 20                  // integer, clamped to 1...60
+//   }
+//
+// Missing file / invalid JSON / bad value -> defaults, never a crash.
+struct RuntimeConfig {
+    let displayName: String
+    let jpegEveryNthFrame: Int
+
+    static let defaultDisplayName = "Agent Screen Display"
+    static let defaultJpegEveryNthFrame = 20
+    static let displayNameMaxLen = 40
+    static let jpegMin = 1
+    static let jpegMax = 60
+
+    static func load() -> RuntimeConfig {
+        var displayName = defaultDisplayName
+        var jpegEveryNthFrame = defaultJpegEveryNthFrame
+
+        let path = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".hermes")
+            .appendingPathComponent("agent-screen.json")
+        guard let data = try? Data(contentsOf: path),
+              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        else {
+            return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame)
+        }
+
+        // displayName: String, trimmed non-empty and <= 40 chars, else default.
+        if let raw = obj["displayName"] as? String {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty, trimmed.count <= displayNameMaxLen {
+                displayName = trimmed
+            }
+        }
+
+        // jpegEveryNthFrame: Int clamped to 1...60, else default.
+        if let raw = obj["jpegEveryNthFrame"] as? NSNumber, CFGetTypeID(raw) == CFNumberGetTypeID() {
+            let isBool = CFBooleanGetTypeID() == CFGetTypeID(raw)  // JSON true/false
+            if !isBool {
+                let value = raw.intValue
+                jpegEveryNthFrame = min(max(value, jpegMin), jpegMax)
+            }
+        }
+
+        return RuntimeConfig(displayName: displayName, jpegEveryNthFrame: jpegEveryNthFrame)
+    }
+}
 
 // MARK: - MJPEG server (loopback only — any local process can watch)
 
@@ -129,6 +185,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var titlebarTimer: Timer?
     private var windowCloseObserver: NSObjectProtocol?
 
+    /// Effective runtime config, read once at launch (see RuntimeConfig above).
+    private let runtimeConfig = RuntimeConfig.load()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         let rect = NSRect(x: 0, y: 0, width: 960, height: 600)
         window = NSWindow(contentRect: rect,
@@ -164,7 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let descriptor = CGVirtualDisplayDescriptor()
         descriptor.setDispatchQueue(DispatchQueue.main)
-        descriptor.name = kDisplayName
+        descriptor.name = runtimeConfig.displayName
         descriptor.maxPixelsWide = 5120
         descriptor.maxPixelsHigh = 2160
         descriptor.sizeInMillimeters = CGSize(width: 1600, height: 1000)
@@ -326,7 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func moveWindowToAgentScreen(pid: pid_t, windowID: CGWindowID) {
         guard ensureAccessibility() else { return }
-        guard let screen = NSScreen.screens.first(where: { $0.localizedName.contains("Agent Screen") }) else {
+        guard let screen = NSScreen.screens.first(where: { $0.localizedName.contains(runtimeConfig.displayName) }) else {
             NSLog("[agent-screen] drag portal: Agent Screen display not found")
             return
         }
@@ -385,7 +444,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateTitlebarHighlight() {
         let mouse = NSEvent.mouseLocation
         let onAgentScreen = NSScreen.screens.contains {
-            $0.localizedName.contains("Agent Screen") && NSMouseInRect(mouse, $0.frame, false)
+            $0.localizedName.contains(runtimeConfig.displayName) && NSMouseInRect(mouse, $0.frame, false)
         }
         let target: NSColor = onAgentScreen
             ? NSColor(calibratedRed: 0.086, green: 0.639, blue: 0.290, alpha: 1.0) // #16A34A
@@ -401,9 +460,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Copy pixels on the stream queue (main) BEFORE the surface is recycled,
         // then JPEG-encode the owned CGImage off-thread. ~3 fps (every 20th frame
-        // of a 60 Hz stream) — enough for the chip preview, cheap on CPU.
+        // of a 60 Hz stream) by default — enough for the chip preview, cheap on
+        // CPU. Cadence is configurable via ~/.hermes/agent-screen.json.
         frameCounter += 1
-        guard frameCounter % kJpegEveryNthFrame == 0 else { return }
+        guard frameCounter % runtimeConfig.jpegEveryNthFrame == 0 else { return }
         let ci = CIImage(ioSurface: surface)
         guard let cg = ciContext.createCGImage(ci, from: ci.extent) else { return }
         DispatchQueue.global(qos: .utility).async { [weak self] in
