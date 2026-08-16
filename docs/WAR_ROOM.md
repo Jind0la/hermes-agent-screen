@@ -25,7 +25,7 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
 - **Eich-02 Nachzug (18:30):** `CGVirtualDisplayMode(width:height:)` nimmt NSUInteger;
   Config-Ints wurden nicht implizit gecastet (nur Literale) → Build-Fehler behoben mit
   explizitem `UInt(...)`. Bundle wirklich neu gebaut + signiert (Agent Screen Dev,
-  Signed 15.08. 18:37:56), Binary enthält `nativeWidth`. Nicht gemergt.
+  Signed 15.08. 18:37:56), Binary enthält `nativeWidth`. Auf main/origin @ 90e6613 (FF 15.08. 18:40:44).
 
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
