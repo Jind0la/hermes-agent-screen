@@ -28,6 +28,7 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
   Signed 15.08. 18:37:56), Binary enthält `nativeWidth`. Nicht gemergt.
 
 ## Laufende Tasks
+- [ ] Review-Fixes #85518 (Status-TTL + Respawn-Guard) — Branch `fix/status-ttl-respawn-guard`
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 

@@ -59,6 +59,29 @@ PROC_NAME = "agent-screen-app"
 # Restarting inside that window crashes (measured: 0s crashes, 3s is enough).
 _DISPLAY_GRACE_S = 2.5
 
+# /status is polled every 5s and multiplies into pgrep+curl churn. Cache probe
+# results briefly so a burst of status calls shares one process/stream probe.
+_STATUS_TTL_S = 2.0
+
+# key -> (timestamp, value). Never mutated across the module-level boundary
+# except via the helpers below.
+_probe_cache: dict[str, tuple[float, bool]] = {}
+
+
+def _probe_cached(key: str, fn, ttl: float = _STATUS_TTL_S) -> bool:
+    """Return a cached probe value within ``ttl`` seconds, else re-run ``fn``."""
+    hit = _probe_cache.get(key)
+    if hit is not None and (time.time() - hit[0]) < ttl:
+        return hit[1]
+    value = fn()
+    _probe_cache[key] = (time.time(), value)
+    return value
+
+
+def _invalidate_probes() -> None:
+    """Drop all cached probe results so the next read re-probes for real."""
+    _probe_cache.clear()
+
 
 def _supported() -> bool:
     return sys.platform == "darwin"
@@ -68,7 +91,7 @@ def _launcher_ok() -> bool:
     return START_SCRIPT.is_file()
 
 
-def _app_running() -> bool:
+def _app_running_uncached() -> bool:
     """Is the agent-screen-app process alive? Exact name match only."""
     try:
         r = subprocess.run(
@@ -82,7 +105,12 @@ def _app_running() -> bool:
         return False
 
 
-def _stream_ok() -> bool:
+def _app_running() -> bool:
+    """Cached wrapper around :func:`_app_running_uncached`."""
+    return _probe_cached("app_running", _app_running_uncached)
+
+
+def _stream_ok_uncached() -> bool:
     """Does the MJPEG streamer answer on :8788/ping?"""
     try:
         r = subprocess.run(
@@ -94,6 +122,11 @@ def _stream_ok() -> bool:
         return r.returncode == 0 and r.stdout.strip() == "ok"
     except Exception:
         return False
+
+
+def _stream_ok() -> bool:
+    """Cached wrapper around :func:`_stream_ok_uncached`."""
+    return _probe_cached("stream_ok", _stream_ok_uncached)
 
 
 def _state(*, error: str | None = None) -> dict:
@@ -137,6 +170,16 @@ def _spawn() -> None:
     )
 
 
+def _kill() -> None:
+    """Terminate the app and wait for it to actually die (respawn guard)."""
+    subprocess.run(
+        ["pkill", "-x", PROC_NAME],
+        capture_output=True,
+        timeout=5,
+    )
+    _wait_until(lambda: not _app_running_uncached())
+
+
 def _require_macos() -> None:
     if not _supported():
         raise HTTPException(status_code=501, detail="Agent Screen requires macOS.")
@@ -156,16 +199,28 @@ def start():
     if _app_running() and _stream_ok():
         return _state()
     if _app_running():
-        # Process up but stream down — wait for it to die, then start clean.
-        _wait_until(lambda: not _app_running())
+        # Process up but stream down — give it a moment to die naturally, then
+        # kill a hung instance so it can never block the respawn (two processes
+        # would fight over :8788 / allowLocalEndpointReuse).
+        _wait_until(lambda: not _app_running_uncached(), timeout=6.0)
+        if _app_running_uncached():
+            _kill()
+        _invalidate_probes()
         time.sleep(_DISPLAY_GRACE_S)
-    if not _app_running():
+    if not _app_running_uncached():
         _spawn()
-    if not _wait_until(_stream_ok, timeout=6.0):
+        _invalidate_probes()
+    if not _wait_until(_stream_ok_uncached, timeout=6.0):
+        # Stream never came up — a broken instance may still be holding the
+        # port. Kill it, breathe, spawn again.
         time.sleep(_DISPLAY_GRACE_S)
-        if not _app_running():
-            _spawn()
-        _wait_until(_stream_ok, timeout=6.0)
+        if _app_running_uncached():
+            _kill()
+            time.sleep(_DISPLAY_GRACE_S)
+        _spawn()
+        _invalidate_probes()
+        _wait_until(_stream_ok_uncached, timeout=6.0)
+    _invalidate_probes()
     return _state()
 
 
@@ -174,11 +229,7 @@ def stop():
     _require_macos()
     if not _app_running():
         return _state()
-    subprocess.run(
-        ["pkill", "-x", PROC_NAME],
-        capture_output=True,
-        timeout=5,
-    )
-    _wait_until(lambda: not _app_running())
+    _kill()
+    _invalidate_probes()
     time.sleep(_DISPLAY_GRACE_S)
     return _state()

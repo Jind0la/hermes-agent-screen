@@ -188,3 +188,86 @@ def test_process_control_uses_exact_name_not_full_cmdline(plugin_api):
     # The old footgun must not come back.
     assert 'pgrep", "-f"' not in src
     assert 'pkill", "-f"' not in src
+
+
+def test_status_probes_are_cached_until_invalidated(client, plugin_api, monkeypatch):
+    counts = {"app": 0, "stream": 0}
+
+    def app_running_uncached():
+        counts["app"] += 1
+        return False
+
+    def stream_ok_uncached():
+        counts["stream"] += 1
+        return False
+
+    monkeypatch.setattr(plugin_api, "_supported", lambda: True)
+    monkeypatch.setattr(plugin_api, "_app_running_uncached", app_running_uncached)
+    monkeypatch.setattr(plugin_api, "_stream_ok_uncached", stream_ok_uncached)
+
+    # Two back-to-back polls fall inside the TTL -> each probe runs once.
+    client.get("/api/plugins/agent-screen/status")
+    client.get("/api/plugins/agent-screen/status")
+    assert counts["app"] == 1
+    assert counts["stream"] == 1
+
+    # Invalidation forces a fresh probe on the next poll.
+    plugin_api._invalidate_probes()
+    client.get("/api/plugins/agent-screen/status")
+    assert counts["app"] == 2
+    assert counts["stream"] == 2
+
+
+class _FastClock:
+    """Deterministic stand-in for ``time``: no-op sleeps, fast-advancing clock.
+
+    Replaces the ``time`` name inside plugin_api only (the stdlib module is
+    untouched), so ``_wait_until`` degenerates to a few instant iterations
+    instead of real multi-second sleeps.
+    """
+
+    def __init__(self):
+        self._t = 0.0
+
+    def time(self):
+        self._t += 1.0
+        return self._t
+
+    def sleep(self, seconds):
+        pass
+
+
+def test_start_respawns_hung_instance(client, plugin_api, monkeypatch):
+    """A hung process (up, stream down, refuses to die) is killed once and
+    respawned once — never two instances side by side."""
+    calls = {"kill": 0, "spawn": 0}
+    state = {"running": True, "stream": False}
+
+    def app_running_uncached():
+        return state["running"]
+
+    def stream_ok_uncached():
+        return state["stream"]
+
+    def kill():
+        calls["kill"] += 1
+        state["running"] = False
+
+    def spawn():
+        calls["spawn"] += 1
+        state["running"] = True
+        state["stream"] = True
+
+    monkeypatch.setattr(plugin_api, "_supported", lambda: True)
+    monkeypatch.setattr(plugin_api, "_launcher_ok", lambda: True)
+    monkeypatch.setattr(plugin_api, "_app_running_uncached", app_running_uncached)
+    monkeypatch.setattr(plugin_api, "_stream_ok_uncached", stream_ok_uncached)
+    monkeypatch.setattr(plugin_api, "_kill", kill)
+    monkeypatch.setattr(plugin_api, "_spawn", spawn)
+    monkeypatch.setattr(plugin_api, "time", _FastClock())
+
+    r = client.post("/api/plugins/agent-screen/start")
+    assert r.status_code == 200
+    assert calls["kill"] == 1
+    assert calls["spawn"] == 1
+    assert r.json()["stream"] is True
