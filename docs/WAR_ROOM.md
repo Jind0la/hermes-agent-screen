@@ -116,6 +116,17 @@ Gemergt auf main (f3d199b).
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 
+## Benchmark 17.08. (Baseline nach Stream-Fix)
+`scripts/benchmark_klicktour.py` (pure CDP, wiederholbar): Blog laden 2,3 s;
+5 Artikel (Klick+Modal lesen+Close) je 1,3-2,1 s, gesamt 11,4 s, 0 Duplikate.
+Zeiten sind von konservativen Sleeps dominiert (~1,3 s/Artikel) — Optimierung:
+Wait-on-Condition statt Sleep. **Capture-Kosten (gleiche Seite):** DOM = 0;
+CDP-Screenshot 146 KB (1200×678); Stream-Frame ~150-250 KB (1280×720, JPEG);
+cua-driver nicht direkt messbar (Proxy screencapture 3,0 MB, 1456×996) →
+Reihenfolge: DOM > CDP > Stream >> screencapture/cua. Stream-Frame-Curl
+timeoutet gelegentlich beim Verbindungsaufbau (3/5 Versuche) → Retry nötig,
+fps_test.py (urllib) zuverlässig — Issue #2.
+
 ## Entscheidungen
 - **Kein First-Party-PR an Nous:** private SPI (CGVirtualDisplay) = Wartungsrisiko;
   dieses Repo ist kanonisch. PR #85518 im hermes-agent ist nur Pointer + DeskPad-Credit
