@@ -121,6 +121,21 @@ Setup im Repo); Era-Review (DeepSeek ≠ Builder-Flash) vollständig.
 MERGE-EMPFEHLUNG: JA (nach Nimars Ja). Folge-Karte: pytest-Collection-Fehler
 (scripts/fps_test.py wird gesammelt, parst -q als fps-Argument) — bestätigt.
 
+## Teil C verifiziert 17.08. ~11:00 (Era, Kaltstart-Messung, f078974)
+Kaltstart-Fix (Server erst nach erstem Display-Frame, Issue #2 Restfall):
+- Diff-Review vs. Plan: server.start()+do-catch+NSLog aus applicationDidFinishLaunching
+  entfernt, onFirstClient bleibt verdrahtet; `serverStarted`-Flag startet den Server
+  im ERSTEN handleFrame (ganz oben, vor frameCounter-Check); einzige Datei
+  native/agent-screen-app.swift (+31/−13); A/B-Code unberührt. exakt nach Plan
+- Eigener Build (build-app.sh): Bundle + Signatur „Agent Screen Dev" OK
+- Kaltstart 2× selbst gemessen (pkill → Start → Tests ab t=0): sofortiger
+  curl auf /stream.mjpeg und /ping → connection refused in 0,15 ms statt 8-s-Timeout
+  (der Issue-Fall ist weg); /ping nach ~0,7-2 s ok; Grab danach 4,6-4,8 MB/8 s rc 200
+- Log-Reihenfolge belegt die Kernlogik: „CGDisplayStream running" → 0,7 s später
+  „MJPEG on …" (Serverstart) → „client connected (1)"
+- Karte t_2011b205 auf done gesetzt (War-Room-Update als docs-Commit). Kaltstart-
+  Verhalten aus Nimar-Sicht: frühster Client bekommt sofortigen Fehler statt Hänger.
+
 ## Stream-Performance 17.08.: Friert bei statischem Inhalt ein
 Gemessen (fps_test.py, Baseline auf main): 0,07 fps (1 Frame in ~15 s) statt
 ~3 — CPU nur 5 %, kein Leistungsproblem. Kernursache: CGVirtualDisplay +
@@ -140,9 +155,11 @@ Gemergt auf main (f3d199b).
 - [x] **Bau-Auftrag an Coder** (Branch `fix/mjpeg-server-robustness`, Plan
       `docs/plans/mjpeg-server-fix.md`): Issue #1 (Client-Gate + Stale-Suppression)
       + Issue #2 (Registrierungs-Race: Append vor Header-Send, Fehler-Completions,
-      Prune verschärft, Connect-Logs). **GEBaut + gepusht** (Commit `d66394d`,
-      build-app.sh grün, nicht gemergt). **Era-Review 17.08. komplett grün**
-      (eigene Messung, s. o.) — MERGE-EMPFEHLUNG JA, wartet auf Nimars Ja
+      Prune verschärft, Connect-Logs) + **Teil C (Kaltstart, f078974)**.
+      **GEBaut + gepusht** (d66394d + f078974, build-app.sh grün, nicht gemergt).
+      **Era-Review 17.08. komplett grün** (A+B: eigene Messung s. o.; Teil C:
+      Kaltstart 2× gemessen, refused statt Timeout, Log-Reihenfolge belegt) —
+      MERGE-EMPFEHLUNG JA, wartet auf Nimars Ja
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift &lt;App&gt;" — Auslösemethode offen
 
