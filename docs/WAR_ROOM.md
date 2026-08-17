@@ -6,213 +6,109 @@ Standalone-Plugin-Repo für die macOS-App „Agent Screen": virtuelles Display
 Hermes-Plugin (Desktop-Pane + Status-Chip + Backend plugin_api.py).
 Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
 
-## Aktueller Stand (13.08.2026)
-- App läuft aus Bundle, signiert „Agent Screen Dev" (TCC-Grant überlebt Rebuilds)
-- Drag-Portal fertig: Fenster per Drag auf das Agent-Screen-Fenster → landet
-  zentriert auf dem virtuellen Display (live bewiesen)
-- Plugin: Pane + Status-Chip (grün #16A34A / grau), Chip startet/stoppt via
-  Backend — vom User bestätigt
-- Dock-Icon V4 (Retro-Manga CRT, randlos)
-- Autostart: entschieden — kein LaunchAgent, nur bei Bedarf
-- Ausführliche lokale Checkliste + Fakten: `~/Workspace/projects/09-agent-screen/CHECKLISTE.md`
-- **Eich-01 erledigt:** Display-Name + `jpegEveryNthFrame` aus `~/.hermes/agent-screen.json`
-  gelesen (Backend `dashboard/config.py`, Swift-Spiegel in `native/agent-screen-app.swift`,
-  Beispiel `native/agent-screen.json.example`). `/status` meldet die effektiven Werte.
-- **Eich-02 erledigt:** Auflösung (`nativeWidth`/`nativeHeight`) + Modus-Liste (`modes`)
-  kommen aus derselben Config (Whitelist von 6 Auflösungen, Float/Bool → Default),
-  `/status` meldet die effektiven Werte, `kNativeWidth/Height` sind durch
-  `runtimeConfig` ersetzt. Refresh bleibt 60, `descriptor.maxPixelsWide/High` 5120/2160.
-- **Eich-02 Nachzug (18:30):** `CGVirtualDisplayMode(width:height:)` nimmt NSUInteger;
-  Config-Ints wurden nicht implizit gecastet (nur Literale) → Build-Fehler behoben mit
-  explizitem `UInt(...)`. Bundle wirklich neu gebaut + signiert (Agent Screen Dev,
-  Signed 15.08. 18:37:56), Binary enthält `nativeWidth`. Nicht gemergt.
+## Aktueller Stand (17.08.2026)
+- App läuft aus Bundle, signiert „Agent Screen Dev" (TCC-Grant überlebt
+  Rebuilds); Drag-Portal fertig (Fenster per Drag auf virtuelles Display);
+  Plugin Pane+Status-Chip (startet/stoppt via Backend); Dock-Icon V4.
+- **Agent-Browser via CDP (LÖSUNG, live verifiziert 17.08):** Chrome for
+  Testing (Playwright-Bundle, Chromium-1208) + eigenes Profil
+  `~/.hermes/agent-browser` + `--remote-debugging-port=9224`; Hermes config
+  `browser.cdp_url: http://127.0.0.1:9224` → ALLE browser_* steuern den
+  sichtbaren Browser DOM-Level (kein AX-Fokus-Chaos, kein SCK-Problem, Enter
+  funktioniert; Form-Submit verifiziert). Start-Skript idempotent:
+  `~/.hermes/scripts/agent-browser.sh`. **Comet als Agent-Browser UNBRAUCHBAR**
+  (Target.createTarget-Tabs unsichtbar, activateTarget/closeTarget ignoriert,
+  Hermes-Supervisor hängt am frontmost-Tab, Telemetrie).
+- **Display deterministisch 1080p** (1920×1080, scale 2, retina-scharf): App
+  bietet nur noch den effektiven Modus an (vorher WindowServer nahm höchsten
+  der 6 Whitelist-Modi → 3360×2100). Defaults Swift + `dashboard/config.py` +
+  `.example` + Live-Config. Branch `fix/default-resolution-1080p`.
+- **Stream-Refresh-Fix gemergt (main f3d199b):** CGVirtualDisplay liefert
+  Frames nur bei Inhaltänderung → statische Seite frierte ein (0,07 fps).
+  Fix: lastFrameCG cachen + 5-Hz-Timer. Era-Verifikation grün: 0,07→4,77 fps,
+  CPU 4,2 %, Crash-Check sauber, pytest 21/21. Elon MERGE-READY (2 Punkte →
+  GitHub-Issue: Timer-Encoding nur bei ≥1 Client + Stale-Suppression).
+- **MJPEG-Robustheit (d66394d+c889f58+a78321b) + Kaltstart (f078974):**
+  Era-Eigenmessung grün (0 Timeouts, >1MB/6s, CPU ~2,5 %, Kaltstart refused
+  statt 8-s-Timeout), Teil C verifiziert. **MERGE-EMPFEHLUNG JA — wartet auf
+  Nimars Ja, nicht gemergt.** Folge-Karte: pytest sammelt scripts/fps_test.py
+  (parst -q als fps-Argument).
+- Eich-01/02 erledigt: Display-Name/jpegEveryNthFrame/Auflösung/Modus-Liste
+  aus `~/.hermes/agent-screen.json`; `kNativeWidth/Height` durch runtimeConfig
+  ersetzt; expliziter `UInt(...)`-Cast (NSUInteger) — Bundle neu gebaut.
 
-## Kernursache 17.08.: Input-Probleme beim Arbeiten auf dem Agent-Screen
-Live-Nutzung (16.08., SEO-Abend): Capture zeigte nach jedem Klick das falsche
-Fenster („Space-Flackern"), Enter-Taste kam nicht an, Vollbild = keine Frames.
-**Eine Wurzel:** Das per Drag-Portal verschobene Fremd-Fenster ist nie das
-„main window" der App — das bleibt das Hauptfenster auf dem Hauptdisplay.
-Jede Input-Aktion aktiviert die App (Event-Routing), macOS holt das main
-window nach vorn → nächster Capture (app-weit) zeigt X/Twitch statt Ziel;
-Tastatur-Events gehen an den Key-Fokus im Hauptfenster (Enter tot). Vollbild
-auf dem virtuellen Display = eigenes Space + ScreenCaptureKit liefert von
-virtuellen Displays keine Frames → 19px-Capture. Workaround gestern:
-`osascript set index of window 2 to 1` + `activate` nach jedem Klick
-(fokusklauend). **Fix-Optionen:** exakte (pid, window_id)-Bindung +
-element_token statt `app=`; px-Fokus-Klick vor Tastatur (`type_text`/`press_key`
-mit x,y); kein Vollbild auf dem Agent-Screen; für Web: Chromium-Browser
-(Comet wird von cua-driver nicht als Browser erkannt → keine DOM-Route).
+## Kernursache Input-Probleme (16.08., SEO-Abend)
+Das per Drag-Portal verschobene Fremd-Fenster ist nie das „main window" — jede
+Input-Aktion aktiviert die App, macOS holt das main window nach vorn → Capture
+(app-weit) zeigt X/Twitch statt Ziel; Enter geht an Key-Fokus im Hauptfenster
+(tot). Vollbild auf virtuellem Display = eigenes Space, SCK liefert dort keine
+Frames → 19px-Capture. Workaround damals: `osascript set index of window 2 to
+1`+`activate` (fokusklauend). **Fix-Optionen (für künftige Sessions):**
+exakte (pid, window_id)-Bindung + element_token statt `app=`; px-Fokus-Klick
+vor Tastatur; kein Vollbild auf Agent-Screen; für Web → Agent-Browser/CDP
+(siehe Aktueller Stand). cua-driver erfasst Browser auf virtuellem Display per
+exakter (pid, window_id)-Bindung — Gegenstück zur Main-Window-Falle.
 
-## Lösung 17.08.: Agent-Browser via CDP (bewiesen)
-**Comet-Befund:** Comet = Chromium (Bundle ai.perplexity.comet, 151.0.7922.247),
-CDP per `--remote-debugging-port` aktivierbar (Perplexity: RemoteDebuggingAllowed),
-aber als Agent-Browser UNBRAUCHBAR: Target.createTarget-Tabs werden unsichtbar
-erzeugt (nie aktiver Tab im Fenster), Target.activateTarget/closeTarget werden
-ignoriert, Hermes-Supervisor hängt am frontmost-Tab ≠ Tool-Tab → Enter/Fokus
-scheitern. Dazu Telemetrie-Frames (count.perplexity.ai).
-**Lösung (live bewiesen):** Chrome for Testing (Playwright-Bundle,
-`~/Library/Caches/ms-playwright/chromium-1208/...`) mit eigenem Profil
-`~/.hermes/agent-browser` + `--remote-debugging-port=9224`, Fenster per AX-PID
-aufs virtuelle Display. Hermes: `browser.cdp_url: http://127.0.0.1:9224` in
-config.yaml → ALLE browser_* Tools steuern den sichtbaren Browser DOM-Level:
-kein AX-Fokus-Chaos, kein SCK-Problem (Screenshots via CDP), Enter funktioniert
-(Playwright-Key-Sequenz; Form-Submit live verifiziert: `?q=agent-screen-rockt`).
-Start: `~/.hermes/scripts/agent-browser.sh` (idempotent, positioniert Fenster).
-**VERIFIZIERT 17.08. 08:20 (nach Hermes-Neustart):** browser_exec (Browser-Use)
-läuft im Agent-Browser, Enter-Form-Submit live („SUBMITTED: agent-screen-rockt"),
-Tab-Aktivierung per `Target.activateTarget` nötig (bei Comet wurde sie ignoriert —
-der entscheidende Unterschied). Logins im Agent-Profil (LinkedIn/X) einmalig
-einrichten — Nimars Comet-Hauptprofil bleibt unberührt.
+## Verifikation 17.08. (Era, eigene Messung)
+Era-Review (DeepSeek ≠ Builder-Flash) gegen Branch-Code ist der Beleg.
+**Lektion: vom Coder gestartete Instanz lief mit ALTEM Code** (keine neuen
+NSLogs, 2/5 Timeouts bei Erstmessung) — „15× 0 Timeouts" des Coders nicht
+belastbar; eigene Messung gegen echten Branch-Code zählt. Diff-Reviews exakt
+nach Plänen (`docs/plans/mjpeg-server-fix.md`, `stream-refresh-fix.md`).
 
-## Lösung 17.08.: Agent-Screen-Display auf 1080p-Default
-Symptom: Desktop lief immer auf 3360×2100, Stream skalierte auf 1080p runter
-→ winzige UI auf allen Captures. Kernursache: Der WindowServer wählt den
-HÖCHSTEN angebotenen Modus; die App bot alle 6 Whitelist-Modi an. Fix: Die App
-bietet nur noch den effektiven Modus an (nativeWidth×nativeHeight, hiDPI=1)
-→ Display deterministisch 1920×1080 (NSScreen verifiziert, scale 2 =
-retina-scharf im Stream). Defaults in Swift + `dashboard/config.py` auf
-1920×1080, `.example` + Live-Config `~/.hermes/agent-screen.json` gesetzt.
-Tests 21/21, Build signiert „Agent Screen Dev". Branch
-`fix/default-resolution-1080p`.
+## Tool-Lektionen (Klick-Tour + Benchmarks, 17.08.)
+- Hit-Test `elementFromPoint` VOR jedem Klick (Footer-Links nach Scroll verdeckt).
+- browser-exec: `agent_helpers.py` = Modul-Import, `js`/`cdp` dort unsichtbar →
+  Helper inline pro Call definieren; `capture_screenshot()` explizit aufrufen
+  (snap-Helper, der nur bekannte Datei kopiert, re-shippt still den alten Shot).
+- Trusted Mausklick (CDP Input.dispatchMouseEvent) nötig bei Next.js-Links;
+  DOM-dispatchEvent reicht nicht. Escape schließt Blog-Modal NICHT —
+  `button[aria-label="Schließen"]`.
+- Natives `<select>`: JS-Wert+change statt DOM-Klick (OS-Menü); Dropdown/
+  Checkbox sind kleine Ziele — Retry muss NEU testen, nicht nur wiederholen.
+- todomvc persistiert in localStorage (Alt-Items verfälschen Läufe) →
+  vorher säubern.
+- Stream-Frame-Curl timeoutet gelegentlich (3/5) → Retry; fps_test.py
+  (urllib) zuverlässig.
+- Klick-Tour-Befund Website: Nav-Link „These" (#blatt) ist tot.
 
-## Test 17.08. 09:15: Klick-Tour nimar.moradbakhti.de (1080p-Display)
-Agent-Browser (Chrome for Testing, CDP 9224) auf dem virtuellen Display:
-Seite lädt, Klicks kommen an — These-Anker, Blog, Impressum, Datenschutz,
-Artikel per CDP-Input.dispatchMouseEvent. Befunde: (1) Blog-Artikel öffnen
-als MODAL (URL bleibt /blog — Seitenverhalten, kein Bug). (2) DOM-
-dispatchEvent reicht bei den Next.js-Links nicht — trusted Mausklick (CDP)
-nötig, wie ein echter Nutzer. (3) Screen 1920×1080 gestochen scharf (Vision:
-„keine Pixelbildung"), Stream liefert 1280×720-Frames. (4) cua-driver erfasst
-den Browser auf dem virtuellen Display per exakter (pid, window_id)-Bindung
-— das Gegenstück zur Main-Window-Falle: gezielte Bindung statt app-weit.
-**Runde 2 (alle 11 Artikel):** jeder Artikel per trusted Klick geöffnet und
-per `button[aria-label="Schließen"]` geschlossen — Escape schließt das Modal
-NICHT. Kategorien: Praxis, Thought Leadership, Compliance, Markt, MilaOS …
-Impressum (751 Z.) + Datenschutz (9,7k Z.) laden sauber. **Website-Befund:**
-Nav-Link „These" (#blatt) ist tot — setzt weder Hash noch scrollt.
-**Tool-Lektionen:** Hit-Test `elementFromPoint` vor jedem Klick (Footer-Links
-nach Scroll verdeckt); browser-exec `agent_helpers.py` = Modul-Import, `js`/
-`cdp` dort unsichtbar → Helper inline pro Call definieren; `capture_screenshot()`
-muss explizit aufgerufen werden — ein snap()-Helper, der nur die bekannte
-Datei kopiert, re-shippt still den alten Screenshot. Startseite live im
-Foto-Design 002 (Porträt, Hero „Ich baue Systeme, die Menschen…").
-
-## Verifikation 17.08. (Era, EIGENE Messung — Review als anderes Modell)
-MJpegServer-Robustheit (fix/mjpeg-server-robustness, d66394d + c889f58 + a78321b):
-- Diff-Review gegen Plan `docs/plans/mjpeg-server-fix.md`: A1–A4 + B1–B3 exakt
-  umgesetzt (prune → Limit → append → Header im selben queue-Block; send-Fehler →
-  conn.cancel(); onFirstClient 0→1 auf Main; lastEncodeDate nur in handleFrame;
-  Timer-Skip; 503-Pfad unverändert; nur native/agent-screen-app.swift + WAR_ROOM)
-- Eigener Build (build-app.sh): Bundle + Signatur „Agent Screen Dev" OK
-- App mit frischem Bundle neu gestartet (pkill -x agent-screen-app → start → /ping ok)
-- curl-Grab: 10× → 10× sofort Daten (3,7–3,8 MB/6 s), 0 Timeouts
-- fps (fps_test.py, statischer Inhalt): 5,06 (≥4) ✓
-- Log-Events nachweisbar: „client connected/disconnected (n)" in
-  /tmp/agent-screen-app.log — A4-Diagnose wirkt, keine Per-Frame-Logs
-- CPU (top, Momentanwerte): mit Client 2,3 %, ohne Client 2,7 % — Grundlast =
-  Display-Frame-Events; Encode-Gate wirkt (kein Anstieg ohne Client möglich,
-  Code + Verhalten belegt). Coder-Wert 0,0 % = ruhigere Umgebung
-- pytest tests/: 21 passed ✓ · kein Crash (pkill → Neustart sauber)
-**WICHTIGER BEFUND:** Die vom Coder um 10:26 gestartete Instanz lief noch mit
-ALTEM Code (keine neuen NSLog-Events, 2/5 curl-Timeouts bei Erstmessung).
-Seine „15× 0 Timeouts" sind damit nicht belastbar — meine Messung gegen den
-echten Branch-Code ist der Beleg. Grok-Review separat nicht gelaufen (kein
-Setup im Repo); Era-Review (DeepSeek ≠ Builder-Flash) vollständig.
-MERGE-EMPFEHLUNG: JA (nach Nimars Ja). Folge-Karte: pytest-Collection-Fehler
-(scripts/fps_test.py wird gesammelt, parst -q als fps-Argument) — bestätigt.
-
-## Teil C verifiziert 17.08. ~11:00 (Era, Kaltstart-Messung, f078974)
-Kaltstart-Fix (Server erst nach erstem Display-Frame, Issue #2 Restfall):
-- Diff-Review vs. Plan: server.start()+do-catch+NSLog aus applicationDidFinishLaunching
-  entfernt, onFirstClient bleibt verdrahtet; `serverStarted`-Flag startet den Server
-  im ERSTEN handleFrame (ganz oben, vor frameCounter-Check); einzige Datei
-  native/agent-screen-app.swift (+31/−13); A/B-Code unberührt. exakt nach Plan
-- Eigener Build (build-app.sh): Bundle + Signatur „Agent Screen Dev" OK
-- Kaltstart 2× selbst gemessen (pkill → Start → Tests ab t=0): sofortiger
-  curl auf /stream.mjpeg und /ping → connection refused in 0,15 ms statt 8-s-Timeout
-  (der Issue-Fall ist weg); /ping nach ~0,7-2 s ok; Grab danach 4,6-4,8 MB/8 s rc 200
-- Log-Reihenfolge belegt die Kernlogik: „CGDisplayStream running" → 0,7 s später
-  „MJPEG on …" (Serverstart) → „client connected (1)"
-- Karte t_2011b205 auf done gesetzt (War-Room-Update als docs-Commit). Kaltstart-
-  Verhalten aus Nimar-Sicht: frühster Client bekommt sofortigen Fehler statt Hänger.
-
-## Stream-Performance 17.08.: Friert bei statischem Inhalt ein
-Gemessen (fps_test.py, Baseline auf main): 0,07 fps (1 Frame in ~15 s) statt
-~3 — CPU nur 5 %, kein Leistungsproblem. Kernursache: CGVirtualDisplay +
-CGDisplayStream liefern Frames NUR bei Inhaltänderung; statische Seite → kein
-handleFrame → kein Broadcast. Fix (Coder, Branch `fix/stream-refresh-timer`, Commit `f3d199b`,
-Plan `docs/plans/stream-refresh-fix.md`): lastFrameCG cachen + 5-Hz-Timer
-(kStreamRefreshInterval 0.2), stopTimers erweitern — GEBaut (Bundle+Signatur
-OK) und gepusht. Danach: Elon-Cross-Review, dann Era-Verifikation (Build,
-fps ≥ 4, CPU < 25 %, Crash-Check, pytest).
-**ERLEDIGT 17.08.:** Era-Verifikation komplett grün — 0,07 → 4,77 fps
-(konstant 5-6/s), CPU 4,2 %, Crash-Check sauber (Fenster schließen, 0
-Crashes), pytest 21/21. Elon: MERGE-READY (2 nicht-blockierende Punkte →
-GitHub-Issue: Timer-Encoding nur bei ≥1 Client + Stale-Suppression).
-Gemergt auf main (f3d199b).
+## Benchmark (17.08., Baseline nach Stream-Fix)
+- `scripts/benchmark_klicktour.py` (pure CDP): Blog 2,3 s; 5 Artikel je
+  1,3–2,1 s, gesamt 11,4 s (Sleep-dominiert) → Optimierung Wait-on-Condition.
+- Capture-Kosten (gleiche Seite): DOM 0 > CDP-Screenshot 146 KB >
+  Stream ~150–250 KB (1280×720 JPEG) >> screencapture 3 MB.
+- `scripts/benchmark_huerden.py` (17.08., 2× grün): dropdown 2 ms (JS-Weg),
+  checkbox 310 ms, slider 315 ms, drag&drop 320 ms, keypress 610 ms,
+  todomvc 3,15 s. Animation lokal 7,8 fps bei CPU 11,9 %.
+- Weitere Kandidaten: demoqa.com, letcode.in/test, automationintesting.online
+  (Restful Booker), demoblaze.com, parabank.parasoft.com. Down:
+  uitestingplayground.com, automationpractice.pl, testpages.herokuapp.com (503).
 
 ## Laufende Tasks
-- [x] **Bau-Auftrag an Coder** (Branch `fix/mjpeg-server-robustness`, Plan
-      `docs/plans/mjpeg-server-fix.md`): Issue #1 (Client-Gate + Stale-Suppression)
-      + Issue #2 (Registrierungs-Race: Append vor Header-Send, Fehler-Completions,
-      Prune verschärft, Connect-Logs) + **Teil C (Kaltstart, f078974)**.
-      **GEBaut + gepusht** (d66394d + f078974, build-app.sh grün, nicht gemergt).
-      **Era-Review 17.08. komplett grün** (A+B: eigene Messung s. o.; Teil C:
-      Kaltstart 2× gemessen, refused statt Timeout, Log-Reihenfolge belegt) —
-      MERGE-EMPFEHLUNG JA, wartet auf Nimars Ja
+- [ ] MJPEG-Robustheit+Kaltstart mergen (nach Nimars Ja; dann
+      pytest-Collection-Fix für fps_test.py)
 - [ ] Kleinkram-Sammlung des Users
-- [ ] Optional: ⌘K-Command „Shift &lt;App&gt;" — Auslösemethode offen
-
-## Benchmark 17.08. (Baseline nach Stream-Fix)
-`scripts/benchmark_klicktour.py` (pure CDP, wiederholbar): Blog laden 2,3 s;
-5 Artikel (Klick+Modal lesen+Close) je 1,3-2,1 s, gesamt 11,4 s, 0 Duplikate.
-Zeiten sind von konservativen Sleeps dominiert (~1,3 s/Artikel) — Optimierung:
-Wait-on-Condition statt Sleep. **Capture-Kosten (gleiche Seite):** DOM = 0;
-CDP-Screenshot 146 KB (1200×678); Stream-Frame ~150-250 KB (1280×720, JPEG);
-cua-driver nicht direkt messbar (Proxy screencapture 3,0 MB, 1456×996) →
-Reihenfolge: DOM > CDP > Stream >> screencapture/cua. Stream-Frame-Curl
-timeoutet gelegentlich beim Verbindungsaufbau (3/5 Versuche) → Retry nötig,
-fps_test.py (urllib) zuverlässig — Issue #2.
-
-## Testseiten-Recherche 17.08. (komplexere Benchmarks)
-**the-internet.herokuapp.com** (Standard, erreichbar): Dropdown ❌ (natives
-OS-Menü — braucht Keyboard/set_value, DOM-Klick wirkungslos), Checkbox ❌
-(kleines Ziel, Hit-Test-Retry ohne Re-Check — Lehre: Retry muss neu testen),
-Slider-Drag ✅ 332 ms, HTML5-Drag&Drop ✅ 339 ms (B↔A), KeyPress-Enter ✅.
-**demo.playwright.dev/todomvc** (Tipp-Flow): insertText+Enter ✅, Toggle ✅
-618 ms, Filter ✅ — kompletter Keyboard→Klick→Filter-Zyklus.
-**scripts/benchmark-animation.html** (lokal, Bewegung): 7,8 fps bei Animation
-(Timer 5 Hz + Display-Frame-Pfad addieren sich), CPU 11,9 %.
-**Hürden-Benchmark (`scripts/benchmark_huerden.py`, 17.08., 2× grün):**
-dropdown 2 ms (JS-Weg), checkbox 310 ms (Inversions-Check + Re-Check-Hit-Test),
-slider 315 ms, drag&drop 320 ms, keypress 610 ms, todomvc 3,15 s (kompletter
-Tipp+Toggle+Filter-Zyklus, localStorage-Säuberung). Befunde: Hit-Test-Retry
-muss neu prüfen; todomvc persistiert in localStorage (Alt-Items verfälschen
-Läufe); natives `<select>` braucht JS-Wert+change statt DOM-Klick.
-Weitere erreichbare Kandidaten: demoqa.com, letcode.in/test,
-automationintesting.online (Restful Booker, echte App+Auth), demoblaze.com,
-parabank.parasoft.com. Down: uitestingplayground.com, automationpractice.pl,
-testpages.herokuapp.com (503).
+- [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 
 ## Entscheidungen
-- **Kein First-Party-PR an Nous:** private SPI (CGVirtualDisplay) = Wartungsrisiko;
-  dieses Repo ist kanonisch. PR #85518 im hermes-agent ist nur Pointer + DeskPad-Credit
-- Kein LaunchAgent-Autostart
-- Git-Workflow: Feature-Branch → Push → Merge, nie direkt auf main; Push nur mit
-  x-access-token-URL
-- Zertifikat „Agent Screen Dev" / Bundle-ID ai.hermes.agent-screen — NIE ad-hoc
-  signieren (TCC-Lektion)
-- DeskPad-Fork (Stengo / Bastian Andelefski, MIT 2022) — NOTICE beachten
+- **Kein First-Party-PR an Nous:** private SPI (CGVirtualDisplay) =
+  Wartungsrisiko; dieses Repo ist kanonisch. PR #85518 im hermes-agent nur
+  Pointer + DeskPad-Credit.
+- Kein LaunchAgent-Autostart.
+- Git-Workflow: Feature-Branch → Push → Merge, nie direkt auf main; Push nur
+  mit x-access-token-URL.
+- Zertifikat „Agent Screen Dev" / Bundle-ID ai.hermes.agent-screen — NIE
+  ad-hoc signieren (TCC-Lektion).
+- DeskPad-Fork (Stengo / Bastian Andelefski, MIT 2022) — NOTICE beachten.
 
 ## Fehlschläge & Korrekturen
-- **Crash EXC_BAD_ACCESS (3× am 13.08.):** use-after-free im Drag-Portal-Timer —
-  Fenster per X geschlossen, während der 0.1s-Timer weiterlief. Fix:
-  `isReleasedWhenClosed=false` + Timer-Stopp bei `willClose` +
-  `applicationWillTerminate`-Backstop → 0 weitere Crashes
-- **Drag-Portal, 3 Bugs:** (1) WindowServer schluckt Titelleisten-Drags → Polling
-  (0.1s); (2) Dock (Layer 20) verdeckt Fenster im Hit-Test → oberstes Layer-0-Fenster;
-  (3) CGWindowBounds/NSEvent (unten-links) vs. CGEventPost (oben-links) → Umrechnung
-- **Dock-Icon-Cache:** `/var/folders`-Caches löschen, nicht nur `~/Library/Caches`
+- **Crash EXC_BAD_ACCESS (3× am 13.08.):** use-after-free im Drag-Portal-Timer
+  (Fenster per X geschlossen, Timer lief weiter). Fix: isReleasedWhenClosed=false
+  + Timer-Stopp bei willClose + applicationWillTerminate-Backstop → 0 weitere.
+- **Drag-Portal, 3 Bugs:** (1) WindowServer schluckt Titelleisten-Drags →
+  Polling; (2) Dock (Layer 20) verdeckt Fenster im Hit-Test → oberstes
+  Layer-0-Fenster; (3) CGWindowBounds/NSEvent vs. CGEventPost → Umrechnung.
+- **Dock-Icon-Cache:** `/var/folders`-Caches löschen, nicht nur ~/Library/Caches.
 
 ## Wichtige Pfade & Fakten
 - App-Code: `native/` · Plugin: `desktop/` · Backend: `desktop/plugin_api.py`
