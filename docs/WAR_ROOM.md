@@ -58,10 +58,11 @@ config.yaml → ALLE browser_* Tools steuern den sichtbaren Browser DOM-Level:
 kein AX-Fokus-Chaos, kein SCK-Problem (Screenshots via CDP), Enter funktioniert
 (Playwright-Key-Sequenz; Form-Submit live verifiziert: `?q=agent-screen-rockt`).
 Start: `~/.hermes/scripts/agent-browser.sh` (idempotent, positioniert Fenster).
-Offen: Hermes-Neustart, damit die Session-Bindung vom alten CDP-Endpunkt auf
-9224 wechselt (dann browser_press final am Chrome verifizieren). Logins im
-Agent-Profil (LinkedIn/X) einmalig einrichten — Nimars Comet-Hauptprofil bleibt
-unberührt.
+**VERIFIZIERT 17.08. 08:20 (nach Hermes-Neustart):** browser_exec (Browser-Use)
+läuft im Agent-Browser, Enter-Form-Submit live („SUBMITTED: agent-screen-rockt"),
+Tab-Aktivierung per `Target.activateTarget` nötig (bei Comet wurde sie ignoriert —
+der entscheidende Unterschied). Logins im Agent-Profil (LinkedIn/X) einmalig
+einrichten — Nimars Comet-Hauptprofil bleibt unberührt.
 
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
