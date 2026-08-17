@@ -64,6 +64,17 @@ Tab-Aktivierung per `Target.activateTarget` nötig (bei Comet wurde sie ignorier
 der entscheidende Unterschied). Logins im Agent-Profil (LinkedIn/X) einmalig
 einrichten — Nimars Comet-Hauptprofil bleibt unberührt.
 
+## Lösung 17.08.: Agent-Screen-Display auf 1080p-Default
+Symptom: Desktop lief immer auf 3360×2100, Stream skalierte auf 1080p runter
+→ winzige UI auf allen Captures. Kernursache: Der WindowServer wählt den
+HÖCHSTEN angebotenen Modus; die App bot alle 6 Whitelist-Modi an. Fix: Die App
+bietet nur noch den effektiven Modus an (nativeWidth×nativeHeight, hiDPI=1)
+→ Display deterministisch 1920×1080 (NSScreen verifiziert, scale 2 =
+retina-scharf im Stream). Defaults in Swift + `dashboard/config.py` auf
+1920×1080, `.example` + Live-Config `~/.hermes/agent-screen.json` gesetzt.
+Tests 21/21, Build signiert „Agent Screen Dev". Branch
+`fix/default-resolution-1080p`.
+
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
