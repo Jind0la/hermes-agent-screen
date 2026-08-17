@@ -97,6 +97,12 @@ muss explizit aufgerufen werden — ein snap()-Helper, der nur die bekannte
 Datei kopiert, re-shippt still den alten Screenshot. Startseite live im
 Foto-Design 002 (Porträt, Hero „Ich baue Systeme, die Menschen…").
 
+## Verifikation 17.08. (Era, komplett)
+MJpegServer-Robustheit (fix/mjpeg-server-robustness @ d66394d, c889f58):
+Diff-Review ✓, Build+Signatur ✓, Neustart ✓, curl 15×→0 Timeouts ✓,
+fps 5,16 (≥4) ✓, CPU 0% ohne / 1,3% mit Client ✓, kein Crash ✓, pytest 21 ✓.
+Offen: Merge (Nimars Ja). Folge: pytest-Collection (fps_test.py) fixen.
+
 ## Stream-Performance 17.08.: Friert bei statischem Inhalt ein
 Gemessen (fps_test.py, Baseline auf main): 0,07 fps (1 Frame in ~15 s) statt
 ~3 — CPU nur 5 %, kein Leistungsproblem. Kernursache: CGVirtualDisplay +
