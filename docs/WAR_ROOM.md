@@ -113,10 +113,11 @@ GitHub-Issue: Timer-Encoding nur bei ≥1 Client + Stale-Suppression).
 Gemergt auf main (f3d199b).
 
 ## Laufende Tasks
-- [ ] **Bau-Auftrag an Coder** (Branch `fix/mjpeg-server-robustness`, Plan
+- [x] **Bau-Auftrag an Coder** (Branch `fix/mjpeg-server-robustness`, Plan
       `docs/plans/mjpeg-server-fix.md`): Issue #1 (Client-Gate + Stale-Suppression)
       + Issue #2 (Registrierungs-Race: Append vor Header-Send, Fehler-Completions,
-      Prune verschärft, Connect-Logs). Danach Era-Vollverifikation (15× curl,
+      Prune verschärft, Connect-Logs). **GEBaut + gepusht** (Commit `d66394d`,
+      build-app.sh grün, nicht gemergt). Offen: Era-Vollverifikation (15× curl,
       fps, CPU mit/ohne Client, Animation-Baseline, Crash, pytest) + Grok-Review
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift &lt;App&gt;" — Auslösemethode offen
