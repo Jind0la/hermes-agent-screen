@@ -75,6 +75,17 @@ retina-scharf im Stream). Defaults in Swift + `dashboard/config.py` auf
 Tests 21/21, Build signiert „Agent Screen Dev". Branch
 `fix/default-resolution-1080p`.
 
+## Test 17.08. 09:15: Klick-Tour nimar.moradbakhti.de (1080p-Display)
+Agent-Browser (Chrome for Testing, CDP 9224) auf dem virtuellen Display:
+Seite lädt, Klicks kommen an — These-Anker, Blog, Impressum, Datenschutz,
+Artikel per CDP-Input.dispatchMouseEvent. Befunde: (1) Blog-Artikel öffnen
+als MODAL (URL bleibt /blog — Seitenverhalten, kein Bug). (2) DOM-
+dispatchEvent reicht bei den Next.js-Links nicht — trusted Mausklick (CDP)
+nötig, wie ein echter Nutzer. (3) Screen 1920×1080 gestochen scharf (Vision:
+„keine Pixelbildung"), Stream liefert 1280×720-Frames. (4) cua-driver erfasst
+den Browser auf dem virtuellen Display per exakter (pid, window_id)-Bindung
+— das Gegenstück zur Main-Window-Falle: gezielte Bindung statt app-weit.
+
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
