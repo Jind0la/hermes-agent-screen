@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Nur test_*.py sammeln — scripts/fps_test.py ist ein Benchmark-Skript und
+# matcht sonst das Default-Muster *_test.py (Collection-Fehler: das Skript
+# liest sys.argv direkt und crasht unter pytest).
+python_files = ["test_*.py"]
