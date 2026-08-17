@@ -97,6 +97,21 @@ muss explizit aufgerufen werden — ein snap()-Helper, der nur die bekannte
 Datei kopiert, re-shippt still den alten Screenshot. Startseite live im
 Foto-Design 002 (Porträt, Hero „Ich baue Systeme, die Menschen…").
 
+## Stream-Performance 17.08.: Friert bei statischem Inhalt ein
+Gemessen (fps_test.py, Baseline auf main): 0,07 fps (1 Frame in ~15 s) statt
+~3 — CPU nur 5 %, kein Leistungsproblem. Kernursache: CGVirtualDisplay +
+CGDisplayStream liefern Frames NUR bei Inhaltänderung; statische Seite → kein
+handleFrame → kein Broadcast. Fix (Coder, Branch `fix/stream-refresh-timer`, Commit `f3d199b`,
+Plan `docs/plans/stream-refresh-fix.md`): lastFrameCG cachen + 5-Hz-Timer
+(kStreamRefreshInterval 0.2), stopTimers erweitern — GEBaut (Bundle+Signatur
+OK) und gepusht. Danach: Elon-Cross-Review, dann Era-Verifikation (Build,
+fps ≥ 4, CPU < 25 %, Crash-Check, pytest).
+**ERLEDIGT 17.08.:** Era-Verifikation komplett grün — 0,07 → 4,77 fps
+(konstant 5-6/s), CPU 4,2 %, Crash-Check sauber (Fenster schließen, 0
+Crashes), pytest 21/21. Elon: MERGE-READY (2 nicht-blockierende Punkte →
+GitHub-Issue: Timer-Encoding nur bei ≥1 Client + Stale-Suppression).
+Gemergt auf main (f3d199b).
+
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
