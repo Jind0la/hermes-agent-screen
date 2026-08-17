@@ -85,6 +85,17 @@ nötig, wie ein echter Nutzer. (3) Screen 1920×1080 gestochen scharf (Vision:
 „keine Pixelbildung"), Stream liefert 1280×720-Frames. (4) cua-driver erfasst
 den Browser auf dem virtuellen Display per exakter (pid, window_id)-Bindung
 — das Gegenstück zur Main-Window-Falle: gezielte Bindung statt app-weit.
+**Runde 2 (alle 11 Artikel):** jeder Artikel per trusted Klick geöffnet und
+per `button[aria-label="Schließen"]` geschlossen — Escape schließt das Modal
+NICHT. Kategorien: Praxis, Thought Leadership, Compliance, Markt, MilaOS …
+Impressum (751 Z.) + Datenschutz (9,7k Z.) laden sauber. **Website-Befund:**
+Nav-Link „These" (#blatt) ist tot — setzt weder Hash noch scrollt.
+**Tool-Lektionen:** Hit-Test `elementFromPoint` vor jedem Klick (Footer-Links
+nach Scroll verdeckt); browser-exec `agent_helpers.py` = Modul-Import, `js`/
+`cdp` dort unsichtbar → Helper inline pro Call definieren; `capture_screenshot()`
+muss explizit aufgerufen werden — ein snap()-Helper, der nur die bekannte
+Datei kopiert, re-shippt still den alten Screenshot. Startseite live im
+Foto-Design 002 (Porträt, Hero „Ich baue Systeme, die Menschen…").
 
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
