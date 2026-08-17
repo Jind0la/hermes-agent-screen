@@ -39,6 +39,23 @@ Code-Befunde (Era-Review, alle in `MJpegServer`):
 
 ## Fix-Design
 
+### Teil C (Issue #2 Restfall — Kaltstart, Era-Befund 17.08. 11:00)
+**Befund:** Nach App-Neustart kommt der erste CGDisplayStream-Frame erst nach
+1–18 s (WindowServer-Hochfahren des virtuellen Displays, gemessen: 1 s / 18 s).
+Verbindet ein Client in dieser Zeit, ist `lastFrameCG == nil` →
+`onFirstClient` sendet nichts → curl timeoutet (--max-time 8). Mit Teil A+B
+wurde der Race bei laufender App behoben (15/15 Grabs), der Kaltstart-Fall
+bleibt.
+
+**Fix:** `server.start()` aus `applicationDidFinishLaunching` entfernen.
+Stattdessen im ERSTEN `handleFrame`-Aufruf (ganz oben, vor dem
+`frameCounter`-Check) einmalig starten (Bool-Flag `serverStarted`).
+Konsequenz: `/ping` antwortet erst, wenn der Stream wirklich bereit ist;
+frühe Clients bekommen connection refused (sofortiger Fehler, Retry explizit)
+statt eines Timeouts. `do-catch` + NSLog bleibt. Keine weiteren Änderungen.
+`onFirstClient` bleibt (fallback für den Fall, dass ein Client nach dem ersten
+Frame verbindet, während `lastFrameCG` veraltet ist).
+
 ### Teil A (Issue #2) — Server-Registrierung robust machen
 - **A1:** Client **vor** dem Header-Send in `clients` aufnehmen — direkt im
   `self.queue.async`-Block von `handle` (serial queue; `broadcast` läuft auf
