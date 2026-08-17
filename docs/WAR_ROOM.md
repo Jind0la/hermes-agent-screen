@@ -136,6 +136,12 @@ Slider-Drag ✅ 332 ms, HTML5-Drag&Drop ✅ 339 ms (B↔A), KeyPress-Enter ✅.
 618 ms, Filter ✅ — kompletter Keyboard→Klick→Filter-Zyklus.
 **scripts/benchmark-animation.html** (lokal, Bewegung): 7,8 fps bei Animation
 (Timer 5 Hz + Display-Frame-Pfad addieren sich), CPU 11,9 %.
+**Hürden-Benchmark (`scripts/benchmark_huerden.py`, 17.08., 2× grün):**
+dropdown 2 ms (JS-Weg), checkbox 310 ms (Inversions-Check + Re-Check-Hit-Test),
+slider 315 ms, drag&drop 320 ms, keypress 610 ms, todomvc 3,15 s (kompletter
+Tipp+Toggle+Filter-Zyklus, localStorage-Säuberung). Befunde: Hit-Test-Retry
+muss neu prüfen; todomvc persistiert in localStorage (Alt-Items verfälschen
+Läufe); natives `<select>` braucht JS-Wert+change statt DOM-Klick.
 Weitere erreichbare Kandidaten: demoqa.com, letcode.in/test,
 automationintesting.online (Restful Booker, echte App+Auth), demoblaze.com,
 parabank.parasoft.com. Down: uitestingplayground.com, automationpractice.pl,
