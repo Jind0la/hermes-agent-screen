@@ -40,9 +40,9 @@ private let kJpegWidth = 1280
 //   {
 //     "displayName": "Agent Screen Display",  // trim, non-empty, <= 40 chars
 //     "jpegEveryNthFrame": 20,                 // integer, clamped to 1...60
-//     "nativeWidth": 3360,                     // both integers + on whitelist
-//     "nativeHeight": 2100,
-//     "modes": [[3360, 2100], ...]             // every pair on whitelist
+//     "nativeWidth": 1920,                     // both integers + on whitelist
+//     "nativeHeight": 1080,
+//     "modes": [[1920, 1080], ...]             // every pair on whitelist
 //   }
 //
 // Resolution whitelist (width, height):
@@ -60,13 +60,13 @@ struct RuntimeConfig {
     static let displayNameMaxLen = 40
     static let jpegMin = 1
     static let jpegMax = 60
-    static let defaultNativeWidth = 3360
-    static let defaultNativeHeight = 2100
+    static let defaultNativeWidth = 1920
+    static let defaultNativeHeight = 1080
     static let defaultModes: [[Int]] = [
+        [1920, 1080],
         [3360, 2100],
         [3840, 2160],
         [2560, 1440],
-        [1920, 1080],
         [1600, 900],
         [1280, 720],
     ]
@@ -303,9 +303,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let settings = CGVirtualDisplaySettings()
         settings.hiDPI = 1
-        settings.modes = runtimeConfig.modes.map {
-            CGVirtualDisplayMode(width: UInt($0[0]), height: UInt($0[1]), refreshRate: 60)
-        }
+        // Offer ONLY the effective mode. The WindowServer picks the HIGHEST
+        // offered mode, so advertising all whitelisted modes always produced
+        // a 3360x2100 desktop while the stream scaled it down to 1080p —
+        // tiny UI on the agent screen. Deterministic: the display is exactly
+        // nativeWidth x nativeHeight (retina-scaled, so the 1080p stream is
+        // crisp).
+        settings.modes = [
+            CGVirtualDisplayMode(width: UInt(runtimeConfig.nativeWidth),
+                                 height: UInt(runtimeConfig.nativeHeight),
+                                 refreshRate: 60)
+        ]
         display.apply(settings)
         NSLog("[agent-screen] display created: ID \(display.displayID)")
 

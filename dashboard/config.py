@@ -13,9 +13,9 @@ Schema (only these keys; anything else is ignored):
     {
       "displayName": "Agent Screen Display",
       "jpegEveryNthFrame": 20,
-      "nativeWidth": 3360,
-      "nativeHeight": 2100,
-      "modes": [[3360, 2100], [3840, 2160], [2560, 1440], [1920, 1080], [1600, 900], [1280, 720]]
+      "nativeWidth": 1920,
+      "nativeHeight": 1080,
+      "modes": [[1920, 1080], [3360, 2100], [3840, 2160], [2560, 1440], [1600, 900], [1280, 720]]
     }
 
 Defaults are used when the file is missing, invalid JSON, or a value fails
@@ -33,13 +33,13 @@ MAX_DISPLAY_NAME_LEN = 40
 JPEG_EVERY_NTH_FRAME_MIN = 1
 JPEG_EVERY_NTH_FRAME_MAX = 60
 
-DEFAULT_NATIVE_WIDTH = 3360
-DEFAULT_NATIVE_HEIGHT = 2100
+DEFAULT_NATIVE_WIDTH = 1920
+DEFAULT_NATIVE_HEIGHT = 1080
 DEFAULT_MODES: list[list[int]] = [
+    [1920, 1080],
     [3360, 2100],
     [3840, 2160],
     [2560, 1440],
-    [1920, 1080],
     [1600, 900],
     [1280, 720],
 ]
@@ -85,7 +85,7 @@ def parse_native(raw_width: Any, raw_height: Any) -> tuple[int, int]:
     """Effective native resolution as (width, height).
 
     Valid only when BOTH values are integers (not bool, not float) AND the pair
-    is on the resolution whitelist. Anything else -> (3360, 2100).
+    is on the resolution whitelist. Anything else -> (1920, 1080).
     """
     if _is_int(raw_width) and _is_int(raw_height):
         if (raw_width, raw_height) in _ALLOWED_RESOLUTIONS:

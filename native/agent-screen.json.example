@@ -1,13 +1,13 @@
 {
   "displayName": "Agent Screen Display",
   "jpegEveryNthFrame": 20,
-  "nativeWidth": 3360,
-  "nativeHeight": 2100,
+  "nativeWidth": 1920,
+  "nativeHeight": 1080,
   "modes": [
+    [1920, 1080],
     [3360, 2100],
     [3840, 2160],
     [2560, 1440],
-    [1920, 1080],
     [1600, 900],
     [1280, 720]
   ]
