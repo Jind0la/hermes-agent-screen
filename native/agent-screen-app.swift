@@ -168,6 +168,16 @@ final class MJpegServer {
     private let queue = DispatchQueue(label: "mjpeg.server")
     private let port: NWEndpoint.Port
 
+    /// Number of connected clients, read off the serial queue (all queue
+    /// blocks are short, so this never blocks the main thread).
+    var clientCount: Int { queue.sync { clients.count } }
+
+    /// Called on the 0→1 client transition (on the main thread) so the
+    /// AppDelegate can immediately encode the cached frame when a first
+    /// client arrives on static content (CGDisplayStream would otherwise
+    /// deliver no new frame).
+    var onFirstClient: (() -> Void)?
+
     init(port: NWEndpoint.Port = 8788) { self.port = port }
 
     func start() throws {
@@ -209,18 +219,34 @@ final class MJpegServer {
                               completion: .contentProcessed { _ in conn.cancel() })
                     return
                 }
+                // Register the client BEFORE sending the header, on the same
+                // serial queue as broadcast — atomic against broadcasts, so no
+                // frame can be missed between header-send and append (Issue #2).
+                self.clients.append(conn)
+                NSLog("[agent-screen] client connected (\(self.clients.count))")
+                if self.clients.count == 1, let cb = self.onFirstClient {
+                    DispatchQueue.main.async { cb() }
+                }
                 let head = "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=frame\r\nCache-Control: no-cache\r\nConnection: keep-alive\r\n\r\n"
-                conn.send(content: head.data(using: .utf8)!, completion: .contentProcessed { _ in
-                    self.queue.async { self.clients.append(conn) }
+                conn.send(content: head.data(using: .utf8)!, completion: .contentProcessed { error in
+                    // Header send failed/hung — drop the client. It's already in
+                    // the list (A1); pruneClients removes it on the next pass.
+                    if error != nil {
+                        self.queue.async { conn.cancel() }
+                    }
                 })
             }
         }
     }
 
     private func pruneClients() {
+        let before = clients.count
         clients.removeAll { conn in
             if case .failed = conn.state { return true }
             return conn.state == .cancelled
+        }
+        if clients.count != before {
+            NSLog("[agent-screen] client disconnected (\(self.clients.count) remaining)")
         }
     }
 
@@ -229,7 +255,17 @@ final class MJpegServer {
             self.pruneClients()
             let frame = Data("--frame\r\nContent-Type: image/jpeg\r\nContent-Length: \(jpeg.count)\r\n\r\n".utf8) + jpeg + Data("\r\n".utf8)
             for conn in self.clients {
-                conn.send(content: frame, completion: .contentProcessed { _ in })
+                conn.send(content: frame, completion: .contentProcessed { error in
+                    // Send failure — the peer is half-dead (no clean TCP close).
+                    // Cancel it so pruneClients clears it on the next pass
+                    // instead of it squatting on a slot (Issue #2).
+                    if error != nil {
+                        self.queue.async {
+                            conn.cancel()
+                            NSLog("[agent-screen] send error → cancel")
+                        }
+                    }
+                })
             }
         }
     }
@@ -261,6 +297,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// refresh timer can re-broadcast it even when CGDisplayStream delivers
     /// no new frames (static content).
     private var lastFrameCG: CGImage?
+
+    /// When the last frame was encoded via the display path (handleFrame).
+    /// Only set there — never by the refresh timer — so a freshly-encoded
+    /// display frame suppresses a redundant timer broadcast (stale-suppression).
+    private var lastEncodeDate: Date?
 
     /// Effective runtime config, read once at launch (see RuntimeConfig above).
     private let runtimeConfig = RuntimeConfig.load()
@@ -294,6 +335,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         do {
             try server.start()
             NSLog("[agent-screen] MJPEG on http://127.0.0.1:8788/stream.mjpeg (loopback, unauthenticated)")
+            // First client on static content: CGDisplayStream won't fire a new
+            // frame, so encode the cached one immediately to get the stream
+            // going (Issue #1, onFirstClient).
+            server.onFirstClient = { [weak self] in
+                guard let self, let cg = self.lastFrameCG else { return }
+                DispatchQueue.global(qos: .utility).async {
+                    self.broadcastJPEG(cg)
+                }
+            }
         } catch {
             NSLog("[agent-screen] server error: \(error)")
         }
@@ -352,7 +402,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // fires handleFrame on content change; this timer re-broadcasts the
         // cached last frame at a constant ~5 Hz floor.
         streamRefreshTimer = Timer.scheduledTimer(withTimeInterval: kStreamRefreshInterval, repeats: true) { [weak self] _ in
-            guard let self, let cg = self.lastFrameCG else { return }
+            guard let self,
+                  // Client gate (Issue #1): don't encode the cached frame when
+                  // nobody is watching — JPEG encoding is the expensive part.
+                  self.server.clientCount > 0,
+                  let cg = self.lastFrameCG else { return }
+            // Stale-suppression (Issue #1): if the display path encoded within
+            // the last interval, skip — that frame is fresher than the cache.
+            if let d = self.lastEncodeDate,
+               Date().timeIntervalSince(d) <= kStreamRefreshInterval { return }
             DispatchQueue.global(qos: .utility).async {
                 self.broadcastJPEG(cg)
             }
@@ -554,12 +612,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // CPU. Cadence is configurable via ~/.hermes/agent-screen.json.
         frameCounter += 1
         guard frameCounter % runtimeConfig.jpegEveryNthFrame == 0 else { return }
+        // Client gate (Issue #1): only run the (expensive) encode path when at
+        // least one client is connected. The counter still advances so cadence
+        // is unchanged once a viewer arrives.
+        guard server.clientCount > 0 else { return }
         let ci = CIImage(ioSurface: surface)
         guard let cg = ciContext.createCGImage(ci, from: ci.extent) else { return }
         // Cache the encoded frame (main queue) so the refresh timer can
         // re-broadcast it even when CGDisplayStream delivers no new frames
         // on static content — otherwise the MJPEG stream freezes.
         lastFrameCG = cg
+        // Stamp when the display path encoded, so the timer knows this frame is
+        // fresh and skips a redundant broadcast (stale-suppression, Issue #1).
+        lastEncodeDate = Date()
         DispatchQueue.global(qos: .utility).async { [weak self] in
             self?.broadcastJPEG(cg)
         }
