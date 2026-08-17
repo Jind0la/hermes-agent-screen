@@ -28,11 +28,10 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
   Fix: lastFrameCG cachen + 5-Hz-Timer. Era-Verifikation grün: 0,07→4,77 fps,
   CPU 4,2 %, Crash-Check sauber, pytest 21/21. Elon MERGE-READY (2 Punkte →
   GitHub-Issue: Timer-Encoding nur bei ≥1 Client + Stale-Suppression).
-- **MJPEG-Robustheit (d66394d+c889f58+a78321b) + Kaltstart (f078974):**
-  Era-Eigenmessung grün (0 Timeouts, >1MB/6s, CPU ~2,5 %, Kaltstart refused
-  statt 8-s-Timeout), Teil C verifiziert. **MERGE-EMPFEHLUNG JA — wartet auf
-  Nimars Ja, nicht gemergt.** Folge-Karte: pytest sammelt scripts/fps_test.py
-  (parst -q als fps-Argument).
+- **MJPEG-Robustheit + Kaltstart gemergt (17.08., FF 56e71cb..7ae224b):**
+  Client-Gate, Stale-Suppression, Verbindungs-Race, Server-Start nach erstem
+  Frame. Era-Messung: 0 Timeouts, fps 5,16, CPU 0 % ohne / ~1–2 % mit Client.
+  Folge: pytest sammelt scripts/fps_test.py (parst -q als fps-Argument).
 - Eich-01/02 erledigt: Display-Name/jpegEveryNthFrame/Auflösung/Modus-Liste
   aus `~/.hermes/agent-screen.json`; `kNativeWidth/Height` durch runtimeConfig
   ersetzt; expliziter `UInt(...)`-Cast (NSUInteger) — Bundle neu gebaut.
@@ -85,7 +84,7 @@ nach Plänen (`docs/plans/mjpeg-server-fix.md`, `stream-refresh-fix.md`).
   uitestingplayground.com, automationpractice.pl, testpages.herokuapp.com (503).
 
 ## Laufende Tasks
-- [ ] MJPEG-Robustheit+Kaltstart mergen (nach Nimars Ja; dann
+- [x] MJPEG-Robustheit+Kaltstart gemergt (7ae224b)
       pytest-Collection-Fix für fps_test.py)
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
