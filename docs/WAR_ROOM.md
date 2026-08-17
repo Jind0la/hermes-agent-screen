@@ -115,6 +115,11 @@ Gemergt auf main (f3d199b).
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
+- [ ] Issue #1: Client-Gate + Stale-Suppression im Stream-Timer (Swift, klein —
+      Coder hat Kontext vom Timer-Bau; danach fps/CPU messen)
+- [ ] Issue #2: curl-Frame-Grab-Timeout beim Verbindungsaufbau (Debug-Fall:
+      Server-Registrierung vs. Broadcast-Race; Retry maskiert es — Wurzel
+      finden, nicht Workaround)
 
 ## Benchmark 17.08. (Baseline nach Stream-Fix)
 `scripts/benchmark_klicktour.py` (pure CDP, wiederholbar): Blog laden 2,3 s;
