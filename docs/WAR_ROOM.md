@@ -43,6 +43,26 @@ element_token statt `app=`; px-Fokus-Klick vor Tastatur (`type_text`/`press_key`
 mit x,y); kein Vollbild auf dem Agent-Screen; für Web: Chromium-Browser
 (Comet wird von cua-driver nicht als Browser erkannt → keine DOM-Route).
 
+## Lösung 17.08.: Agent-Browser via CDP (bewiesen)
+**Comet-Befund:** Comet = Chromium (Bundle ai.perplexity.comet, 151.0.7922.247),
+CDP per `--remote-debugging-port` aktivierbar (Perplexity: RemoteDebuggingAllowed),
+aber als Agent-Browser UNBRAUCHBAR: Target.createTarget-Tabs werden unsichtbar
+erzeugt (nie aktiver Tab im Fenster), Target.activateTarget/closeTarget werden
+ignoriert, Hermes-Supervisor hängt am frontmost-Tab ≠ Tool-Tab → Enter/Fokus
+scheitern. Dazu Telemetrie-Frames (count.perplexity.ai).
+**Lösung (live bewiesen):** Chrome for Testing (Playwright-Bundle,
+`~/Library/Caches/ms-playwright/chromium-1208/...`) mit eigenem Profil
+`~/.hermes/agent-browser` + `--remote-debugging-port=9224`, Fenster per AX-PID
+aufs virtuelle Display. Hermes: `browser.cdp_url: http://127.0.0.1:9224` in
+config.yaml → ALLE browser_* Tools steuern den sichtbaren Browser DOM-Level:
+kein AX-Fokus-Chaos, kein SCK-Problem (Screenshots via CDP), Enter funktioniert
+(Playwright-Key-Sequenz; Form-Submit live verifiziert: `?q=agent-screen-rockt`).
+Start: `~/.hermes/scripts/agent-browser.sh` (idempotent, positioniert Fenster).
+Offen: Hermes-Neustart, damit die Session-Bindung vom alten CDP-Endpunkt auf
+9224 wechselt (dann browser_press final am Chrome verifizieren). Logins im
+Agent-Profil (LinkedIn/X) einmalig einrichten — Nimars Comet-Hauptprofil bleibt
+unberührt.
+
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
