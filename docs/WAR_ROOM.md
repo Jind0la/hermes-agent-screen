@@ -97,11 +97,29 @@ muss explizit aufgerufen werden — ein snap()-Helper, der nur die bekannte
 Datei kopiert, re-shippt still den alten Screenshot. Startseite live im
 Foto-Design 002 (Porträt, Hero „Ich baue Systeme, die Menschen…").
 
-## Verifikation 17.08. (Era, komplett)
-MJpegServer-Robustheit (fix/mjpeg-server-robustness @ d66394d, c889f58):
-Diff-Review ✓, Build+Signatur ✓, Neustart ✓, curl 15×→0 Timeouts ✓,
-fps 5,16 (≥4) ✓, CPU 0% ohne / 1,3% mit Client ✓, kein Crash ✓, pytest 21 ✓.
-Offen: Merge (Nimars Ja). Folge: pytest-Collection (fps_test.py) fixen.
+## Verifikation 17.08. (Era, EIGENE Messung — Review als anderes Modell)
+MJpegServer-Robustheit (fix/mjpeg-server-robustness, d66394d + c889f58 + a78321b):
+- Diff-Review gegen Plan `docs/plans/mjpeg-server-fix.md`: A1–A4 + B1–B3 exakt
+  umgesetzt (prune → Limit → append → Header im selben queue-Block; send-Fehler →
+  conn.cancel(); onFirstClient 0→1 auf Main; lastEncodeDate nur in handleFrame;
+  Timer-Skip; 503-Pfad unverändert; nur native/agent-screen-app.swift + WAR_ROOM)
+- Eigener Build (build-app.sh): Bundle + Signatur „Agent Screen Dev" OK
+- App mit frischem Bundle neu gestartet (pkill -x agent-screen-app → start → /ping ok)
+- curl-Grab: 10× → 10× sofort Daten (3,7–3,8 MB/6 s), 0 Timeouts
+- fps (fps_test.py, statischer Inhalt): 5,06 (≥4) ✓
+- Log-Events nachweisbar: „client connected/disconnected (n)" in
+  /tmp/agent-screen-app.log — A4-Diagnose wirkt, keine Per-Frame-Logs
+- CPU (top, Momentanwerte): mit Client 2,3 %, ohne Client 2,7 % — Grundlast =
+  Display-Frame-Events; Encode-Gate wirkt (kein Anstieg ohne Client möglich,
+  Code + Verhalten belegt). Coder-Wert 0,0 % = ruhigere Umgebung
+- pytest tests/: 21 passed ✓ · kein Crash (pkill → Neustart sauber)
+**WICHTIGER BEFUND:** Die vom Coder um 10:26 gestartete Instanz lief noch mit
+ALTEM Code (keine neuen NSLog-Events, 2/5 curl-Timeouts bei Erstmessung).
+Seine „15× 0 Timeouts" sind damit nicht belastbar — meine Messung gegen den
+echten Branch-Code ist der Beleg. Grok-Review separat nicht gelaufen (kein
+Setup im Repo); Era-Review (DeepSeek ≠ Builder-Flash) vollständig.
+MERGE-EMPFEHLUNG: JA (nach Nimars Ja). Folge-Karte: pytest-Collection-Fehler
+(scripts/fps_test.py wird gesammelt, parst -q als fps-Argument) — bestätigt.
 
 ## Stream-Performance 17.08.: Friert bei statischem Inhalt ein
 Gemessen (fps_test.py, Baseline auf main): 0,07 fps (1 Frame in ~15 s) statt
@@ -123,8 +141,8 @@ Gemergt auf main (f3d199b).
       `docs/plans/mjpeg-server-fix.md`): Issue #1 (Client-Gate + Stale-Suppression)
       + Issue #2 (Registrierungs-Race: Append vor Header-Send, Fehler-Completions,
       Prune verschärft, Connect-Logs). **GEBaut + gepusht** (Commit `d66394d`,
-      build-app.sh grün, nicht gemergt). Offen: Era-Vollverifikation (15× curl,
-      fps, CPU mit/ohne Client, Animation-Baseline, Crash, pytest) + Grok-Review
+      build-app.sh grün, nicht gemergt). **Era-Review 17.08. komplett grün**
+      (eigene Messung, s. o.) — MERGE-EMPFEHLUNG JA, wartet auf Nimars Ja
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift &lt;App&gt;" — Auslösemethode offen
 
