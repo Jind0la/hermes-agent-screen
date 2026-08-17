@@ -85,7 +85,7 @@ nach Plänen (`docs/plans/mjpeg-server-fix.md`, `stream-refresh-fix.md`).
 
 ## Laufende Tasks
 - [x] MJPEG-Robustheit+Kaltstart gemergt (7ae224b)
-      pytest-Collection-Fix für fps_test.py)
+- [ ] pytest-Collection-Fix: scripts/fps_test.py wird von pytest gesammelt
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
 
