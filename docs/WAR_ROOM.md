@@ -27,6 +27,22 @@ Install: `./install.sh` → `~/.hermes/plugins` + desktop-plugins + Skill.
   explizitem `UInt(...)`. Bundle wirklich neu gebaut + signiert (Agent Screen Dev,
   Signed 15.08. 18:37:56), Binary enthält `nativeWidth`. Nicht gemergt.
 
+## Kernursache 17.08.: Input-Probleme beim Arbeiten auf dem Agent-Screen
+Live-Nutzung (16.08., SEO-Abend): Capture zeigte nach jedem Klick das falsche
+Fenster („Space-Flackern"), Enter-Taste kam nicht an, Vollbild = keine Frames.
+**Eine Wurzel:** Das per Drag-Portal verschobene Fremd-Fenster ist nie das
+„main window" der App — das bleibt das Hauptfenster auf dem Hauptdisplay.
+Jede Input-Aktion aktiviert die App (Event-Routing), macOS holt das main
+window nach vorn → nächster Capture (app-weit) zeigt X/Twitch statt Ziel;
+Tastatur-Events gehen an den Key-Fokus im Hauptfenster (Enter tot). Vollbild
+auf dem virtuellen Display = eigenes Space + ScreenCaptureKit liefert von
+virtuellen Displays keine Frames → 19px-Capture. Workaround gestern:
+`osascript set index of window 2 to 1` + `activate` nach jedem Klick
+(fokusklauend). **Fix-Optionen:** exakte (pid, window_id)-Bindung +
+element_token statt `app=`; px-Fokus-Klick vor Tastatur (`type_text`/`press_key`
+mit x,y); kein Vollbild auf dem Agent-Screen; für Web: Chromium-Browser
+(Comet wird von cua-driver nicht als Browser erkannt → keine DOM-Route).
+
 ## Laufende Tasks
 - [ ] Kleinkram-Sammlung des Users
 - [ ] Optional: ⌘K-Command „Shift <App>" — Auslösemethode offen
