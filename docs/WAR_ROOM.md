@@ -127,6 +127,20 @@ Reihenfolge: DOM > CDP > Stream >> screencapture/cua. Stream-Frame-Curl
 timeoutet gelegentlich beim Verbindungsaufbau (3/5 Versuche) → Retry nötig,
 fps_test.py (urllib) zuverlässig — Issue #2.
 
+## Testseiten-Recherche 17.08. (komplexere Benchmarks)
+**the-internet.herokuapp.com** (Standard, erreichbar): Dropdown ❌ (natives
+OS-Menü — braucht Keyboard/set_value, DOM-Klick wirkungslos), Checkbox ❌
+(kleines Ziel, Hit-Test-Retry ohne Re-Check — Lehre: Retry muss neu testen),
+Slider-Drag ✅ 332 ms, HTML5-Drag&Drop ✅ 339 ms (B↔A), KeyPress-Enter ✅.
+**demo.playwright.dev/todomvc** (Tipp-Flow): insertText+Enter ✅, Toggle ✅
+618 ms, Filter ✅ — kompletter Keyboard→Klick→Filter-Zyklus.
+**scripts/benchmark-animation.html** (lokal, Bewegung): 7,8 fps bei Animation
+(Timer 5 Hz + Display-Frame-Pfad addieren sich), CPU 11,9 %.
+Weitere erreichbare Kandidaten: demoqa.com, letcode.in/test,
+automationintesting.online (Restful Booker, echte App+Auth), demoblaze.com,
+parabank.parasoft.com. Down: uitestingplayground.com, automationpractice.pl,
+testpages.herokuapp.com (503).
+
 ## Entscheidungen
 - **Kein First-Party-PR an Nous:** private SPI (CGVirtualDisplay) = Wartungsrisiko;
   dieses Repo ist kanonisch. PR #85518 im hermes-agent ist nur Pointer + DeskPad-Credit

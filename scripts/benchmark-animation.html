@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Agent-Screen Bewegungs-Benchmark</title>
+<style>
+  body { margin: 0; background: #111; color: #eee; font-family: sans-serif; }
+  #box {
+    position: absolute; width: 240px; height: 140px; border-radius: 12px;
+    background: linear-gradient(135deg, #16A34A, #0ea5e9);
+    animation: bounce 2.4s ease-in-out infinite;
+  }
+  @keyframes bounce {
+    0%   { left: 4%; top: 8%; transform: rotate(0deg); }
+    25%  { left: 70%; top: 8%; transform: rotate(90deg); }
+    50%  { left: 70%; top: 62%; transform: rotate(180deg); }
+    75%  { left: 4%; top: 62%; transform: rotate(270deg); }
+    100% { left: 4%; top: 8%; transform: rotate(360deg); }
+  }
+  #spinner {
+    position: absolute; right: 6%; bottom: 8%; width: 90px; height: 90px;
+    border: 10px solid rgba(255,255,255,.15); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #timer { position: fixed; top: 12px; left: 12px; font-size: 28px; }
+</style>
+</head>
+<body>
+<div id="timer">0.0s</div>
+<div id="box"></div>
+<div id="spinner"></div>
+<script>
+  const t0 = performance.now();
+  setInterval(() => {
+    document.getElementById('timer').textContent = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+  }, 100);
+</script>
+</body>
+</html>
