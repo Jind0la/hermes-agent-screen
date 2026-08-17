@@ -279,6 +279,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var display: CGVirtualDisplay!
     private var stream: CGDisplayStream?
     private var server = MJpegServer()
+    /// Set once the first CGDisplayStream frame has arrived; the MJPEG server
+    /// is only started then, so a client connecting during the cold-start
+    /// warm-up (WindowServer still spinning up the virtual display, 1-18s)
+    /// gets an immediate connection-refused instead of an 8s curl timeout.
+    private var serverStarted = false
     private let ciContext = CIContext()
     private var frameCounter = 0
     private var axPrompted = false
@@ -332,20 +337,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         contentView.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(didClickOnScreen)))
 
-        do {
-            try server.start()
-            NSLog("[agent-screen] MJPEG on http://127.0.0.1:8788/stream.mjpeg (loopback, unauthenticated)")
-            // First client on static content: CGDisplayStream won't fire a new
-            // frame, so encode the cached one immediately to get the stream
-            // going (Issue #1, onFirstClient).
-            server.onFirstClient = { [weak self] in
-                guard let self, let cg = self.lastFrameCG else { return }
-                DispatchQueue.global(qos: .utility).async {
-                    self.broadcastJPEG(cg)
-                }
+        // onFirstClient is wired here, before the server starts, so it is
+        // ready for whoever connects first. The server itself is started only
+        // once the first CGDisplayStream frame arrives (see handleFrame) —
+        // cold-start (Issue #2). First client on static content: CGDisplayStream
+        // won't fire a new frame, so encode the cached one immediately to get
+        // the stream going (Issue #1, onFirstClient).
+        server.onFirstClient = { [weak self] in
+            guard let self, let cg = self.lastFrameCG else { return }
+            DispatchQueue.global(qos: .utility).async {
+                self.broadcastJPEG(cg)
             }
-        } catch {
-            NSLog("[agent-screen] server error: \(error)")
         }
 
         let descriptor = CGVirtualDisplayDescriptor()
@@ -603,6 +605,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleFrame(surface: IOSurface?) {
+        // Cold-start (Issue #2): the first CGDisplayStream frame can arrive
+        // 1-18s after launch (WindowServer spins up the virtual display). Start
+        // the MJPEG server only once that first frame is actually here, so a
+        // client connecting during the warm-up window gets an immediate
+        // connection-refused (retry-able) instead of an 8s curl timeout.
+        // Runs on the main queue (stream queue is .main), same as the old
+        // applicationDidFinishLaunching call, so it is thread-safe.
+        if !serverStarted {
+            serverStarted = true
+            do {
+                try server.start()
+                NSLog("[agent-screen] MJPEG on http://127.0.0.1:8788/stream.mjpeg (loopback, unauthenticated)")
+            } catch {
+                NSLog("[agent-screen] server error: \(error)")
+            }
+        }
         guard let surface else { return }
         contentView.layer?.contents = surface
 
