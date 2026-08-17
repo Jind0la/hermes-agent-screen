@@ -28,6 +28,10 @@ private let kProductID: UInt32 = 0x4153 // 'AS'
 private let kSerialNum: UInt32 = 0x0001
 private let kStreamMaxClients = 8
 private let kJpegWidth = 1280
+/// Minimum stream cadence: CGDisplayStream only fires on content CHANGE, so a
+/// static display would freeze the MJPEG output. This timer re-broadcasts the
+/// cached last frame at 5 Hz to keep the stream alive regardless of new frames.
+private let kStreamRefreshInterval: TimeInterval = 0.2
 
 // MARK: - Runtime config (~/.hermes/agent-screen.json)
 //
@@ -250,7 +254,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var dragSeenMovement = false
     private var dragWatchTimer: Timer?
     private var titlebarTimer: Timer?
+    private var streamRefreshTimer: Timer?
     private var windowCloseObserver: NSObjectProtocol?
+
+    /// Last successfully encoded frame, cached on the main queue so the
+    /// refresh timer can re-broadcast it even when CGDisplayStream delivers
+    /// no new frames (static content).
+    private var lastFrameCG: CGImage?
 
     /// Effective runtime config, read once at launch (see RuntimeConfig above).
     private let runtimeConfig = RuntimeConfig.load()
@@ -336,6 +346,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         titlebarTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
             self?.updateTitlebarHighlight()
+        }
+
+        // Keep the MJPEG stream alive on static content. CGDisplayStream only
+        // fires handleFrame on content change; this timer re-broadcasts the
+        // cached last frame at a constant ~5 Hz floor.
+        streamRefreshTimer = Timer.scheduledTimer(withTimeInterval: kStreamRefreshInterval, repeats: true) { [weak self] _ in
+            guard let self, let cg = self.lastFrameCG else { return }
+            DispatchQueue.global(qos: .utility).async {
+                self.broadcastJPEG(cg)
+            }
         }
 
         installWindowDragMonitor()
@@ -536,6 +556,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard frameCounter % runtimeConfig.jpegEveryNthFrame == 0 else { return }
         let ci = CIImage(ioSurface: surface)
         guard let cg = ciContext.createCGImage(ci, from: ci.extent) else { return }
+        // Cache the encoded frame (main queue) so the refresh timer can
+        // re-broadcast it even when CGDisplayStream delivers no new frames
+        // on static content — otherwise the MJPEG stream freezes.
+        lastFrameCG = cg
         DispatchQueue.global(qos: .utility).async { [weak self] in
             self?.broadcastJPEG(cg)
         }
@@ -586,6 +610,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dragWatchTimer = nil
         titlebarTimer?.invalidate()
         titlebarTimer = nil
+        streamRefreshTimer?.invalidate()
+        streamRefreshTimer = nil
+        lastFrameCG = nil
     }
 }
 
