@@ -41,11 +41,17 @@ Code-Befunde (Era-Review, alle in `MJpegServer`):
 
 ### Teil C (Issue #2 Restfall — Kaltstart, Era-Befund 17.08. 11:00)
 **Befund:** Nach App-Neustart kommt der erste CGDisplayStream-Frame erst nach
-1–18 s (WindowServer-Hochfahren des virtuellen Displays, gemessen: 1 s / 18 s).
-Verbindet ein Client in dieser Zeit, ist `lastFrameCG == nil` →
+1–18 s (WindowServer-Hochfahren des virtuellen Displays, gemessen: 1 s / 18 s /
+1 s). Verbindet ein Client in dieser Zeit, ist `lastFrameCG == nil` →
 `onFirstClient` sendet nichts → curl timeoutet (--max-time 8). Mit Teil A+B
 wurde der Race bei laufender App behoben (15/15 Grabs), der Kaltstart-Fall
 bleibt.
+**Zusatzbefund (Nimar 17.08.):** Ein Klick auf das Agent-Screen-Fenster
+(Klick-Warp → `CGDisplayMoveCursorToPoint` aufs virtuelle Display) kann das
+erste Rendering triggern (Cursor = erster Inhalt → Frame). Der Frame kommt
+aber auch ohne Interaktion (1-s-Lauf ohne Klick belegt) — die Dauer ist
+WindowServer-determiniert und variabel, der Klick ist nur ein möglicher
+Trigger, kein Pflichtweg.
 
 **Fix:** `server.start()` aus `applicationDidFinishLaunching` entfernen.
 Stattdessen im ERSTEN `handleFrame`-Aufruf (ganz oben, vor dem
